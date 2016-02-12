@@ -1,0 +1,10 @@
+package main.scala.immutable.operators
+
+import main.scala.immutable.{Result, Column, Operator}
+
+/**
+ * Created by marcin on 2/5/16.
+ */
+case class SelectRange[A](column: Column[A], a: A, b: A) extends Operator {
+    def execute: Result = ???
+}

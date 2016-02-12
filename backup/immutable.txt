@@ -1,0 +1,203 @@
+package main.scala.immutable
+
+/**
+ * Created by marcin on 8/14/15.
+ *
+ * Requirements and features:
+ * - no joins needed
+ * - bit packing to reduce space in memory
+ * - off heap data storage
+ * - data files are memory mapped for quick access to data
+ * - support for aggregates (count, sum, group by) and predicate conditions (<,>,=,!=,&)
+ * - support for limit
+ * - support for ranges
+ *
+ *
+ * http://javarevisited.blogspot.com/2012/01/memorymapped-file-and-io-in-java.html
+ *
+ * Table metadata:
+ * - each table needs to have data described somewhere in the file so it can
+ * be loaded into the system
+ * - data columns
+ *
+ * Some sources mention to use AVL tree for index
+ *
+ * Inverted index may be a way to go
+ * http://stackoverflow.com/questions/12511543/how-to-build-a-simple-inverted-index
+ *
+ * Reading binary files with hexdump
+ * example: hexdump -v -e '1/12 "%s" "\t" 1/4 "%d" "\n"' first_name.dat | less
+ *
+ * Relational Algebra:
+ * http://www.go4expert.com/articles/relational-algebra-operations-sql-t21166/
+ */
+
+import java.util.Date
+
+import core._
+
+object MediumTable extends App {
+    val db = DB
+
+    val table = Table("test_table").
+            withColumn(TinyIntColumn("age", indexed=true)).
+            withColumn(VarCharColumn("first_name", 25, indexed=true)).
+            withColumn(CharColumn("state", 2, indexed=true)).
+            withColumn(CharColumn("zip", 5, indexed=true))
+//    table.loadData("/Users/marcin/correla/correla_dataset.csv", "\\|")
+
+    db.registerTable(table)
+    db.prepareTable(table)
+
+    val start = new Date().getTime()
+
+    val res = DB.Eq("first_name", "Sergio").execute
+
+    val count = db.select(res,
+        table.getColumn[TinyIntColumn]("age"),
+        table.getColumn[VarCharColumn]("first_name")
+//        table.getColumn[CharColumn]("state"),
+//        table.getColumn[CharColumn]("zip")
+    )
+    println("All completed in: " + (new Date().getTime() - start).toString + "ms")
+    println("Data size: " + count)
+}
+
+object MainSmall extends App {
+    val db = DB
+
+    val table = Table("test_table_small").
+            withColumn(TinyIntColumn("age", indexed=true)).
+            withColumn(VarCharColumn("first_name", 50, indexed=true)).
+            withColumn(VarCharColumn("last_name", 50, indexed=true)).
+            withColumn(VarCharColumn("city", 50, indexed=true)).
+            withColumn(CharColumn("state", 2, indexed=true)).
+            withColumn(CharColumn("zip", 5, indexed=true)).
+            withColumn(TinyIntColumn("model_1", indexed=true)).
+            withColumn(TinyIntColumn("model_2", indexed=true)).
+            withColumn(TinyIntColumn("model_3", indexed=true)).
+            withColumn(TinyIntColumn("model_4", indexed=true))
+//            table.loadData("/Users/marcin/correla/correla_dataset_small.csv", "\\|")
+
+    db.registerTable(table)
+    db.prepareTable(table)
+//
+    val start = new Date().getTime()
+
+    val res_1 = DB.Eq("age", 50).execute
+//
+//    println("Search done in: " + (new Date().getTime() - start).toString + "ms")
+//
+//    //    val res_2 = Union(
+//    //        Equals("model_1", 85),
+//    //        Equals("model_1", 86)
+//    //    ).execute
+//
+//    val res_3 = HashIntersect(
+//        PassResult(res_1),
+////        Range("model_1", 75, Range.GT)
+//                Equals("first_name", "Sergio")
+//    ).execute
+//
+//    //    val res = Equals("age", 50).execute
+//    //    val res = Range("model_1", 87, Range.GT).execute
+//
+//    println("Search done in: " + (new Date().getTime() - start).toString + "ms")
+//
+//    val count = Engine.select(res_3,
+//        table.getColumn[TinyIntColumn]("age"),
+//        table.getColumn[CharColumn]("first_name"),
+//        table.getColumn[CharColumn]("city"),
+//        table.getColumn[CharColumn]("state"),
+//        table.getColumn[CharColumn]("zip"),
+//        table.getColumn[TinyIntColumn]("model_1"),
+//        table.getColumn[TinyIntColumn]("model_2")
+//    )
+//    println("All completed in: " + (new Date().getTime() - start).toString + "ms")
+//    println("Data size: " + count)
+
+}
+
+object MainBig extends App {
+    /*
+     * 12,000,000
+     * 15,000,000
+     * 15,000,000
+     * 2,000,000
+     * 5,000,000
+     * 4 * 1,000,000
+     * =
+     * 53,000,000 = 50MB would take to store this data in dense tables
+     * the same data takes 44MB in sparse tables
+     *
+     * TODO: Research how to run application in a REPL
+     */
+    val db = DB
+
+    val testTable = Table("test_table_100mil").
+            withColumn(TinyIntColumn("age", indexed=true)).
+            withColumn(CharColumn("first_name", 12, indexed=true)).
+            withColumn(CharColumn("city", 15, indexed=true)).
+            withColumn(CharColumn("state", 2, indexed=true)).
+            withColumn(CharColumn("zip", 5, indexed=true))
+    //    testTable.loadData("/Users/marcin/correla/correla_dataset_100mil.csv", "\\|")
+
+    db.prepareTable(testTable)
+    //    val res_1 = Intersect(
+    //        Equals("first_name", "Sergio"),
+    //        Equals("age", 50)
+    //    ).execute
+    //
+    //    val start = new Date().getTime()
+    //
+    ////    val res_1 = HashIntersect(
+    ////        Equals("first_name", "Sergio"),
+    ////        Range("age", 50, Range.GT)
+    ////    ).execute
+    //
+    //    println("Search done in: " + (new Date().getTime() - start).toString + "ms")
+    //
+    //    val res_2 = Intersect(
+    //        PassResult(res_1),
+    //        Equals("state", "CA")
+    //    ).execute
+    //
+    //    println("Search done in: " + (new Date().getTime() - start).toString + "ms")
+    //
+    //    val res_3 = Intersect(
+    //        PassResult(res_1),
+    //        Equals("state", "OH")
+    //    ).execute
+    //
+    //    println("Search done in: " + (new Date().getTime() - start).toString + "ms")
+    //
+    ////    val res_4 = Intersect(
+    ////        PassResult(res_1),
+    ////        Equals("state", "NY")
+    ////    ).execute
+    ////
+    ////    println("Search done in: " + (new Date().getTime() - start).toString + "ms")
+    //
+    //    val res_5 = Union(
+    //        PassResult(res_2),
+    //        PassResult(res_3)
+    //    ).execute
+    //
+    ////    val res_6 = Union(
+    ////        PassResult(res_4),
+    ////        PassResult(res_5)
+    ////    ).execute
+    //
+    //    println("Search done in: " + (new Date().getTime() - start).toString + "ms")
+    //
+    //    val count = Engine.select(res_5,
+    //        testTable.getColumn("age"),
+    //        testTable.getColumn("first_name"),
+    //        testTable.getColumn("city"),
+    //        testTable.getColumn("state"),
+    //        testTable.getColumn("zip")
+    //    )
+    //    println("All completed in: " + (new Date().getTime() - start).toString + "ms")
+    //    println("Data size: " + count)
+
+}

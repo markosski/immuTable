@@ -1,0 +1,59 @@
+
+/**
+ * Created by marcin on 8/21/15.
+ */
+package main.scala.immutable
+
+import scala.collection.mutable.MutableList
+
+// TODO: Fixed lenght value columns can use indexing leaving on VarCharColumn using byte offsets
+// https://twitter.github.io/scala_school/type-basics.html
+
+
+class Table(val name: String) {
+    var columns = MutableList[Column[_]]()
+
+    def withColumn[A](column: Column[A]): Table = {
+        columns = columns :+ column
+        this
+    }
+
+    def loadData(filename: String, delimiter: String): Unit = {
+        for (column <- columns) {
+            column match {
+                case c: IntColumn => DB.storeFixedLength(filename, name, column, columns.toList.indexOf(column), delimiter)
+                case c: TinyIntColumn => DB.storeFixedLength(filename, name, column, columns.toList.indexOf(column), delimiter)
+                case c: ShortIntColumn => DB.storeFixedLength(filename, name, column, columns.toList.indexOf(column), delimiter)
+                case c: DecimalColumn => DB.storeFixedLength(filename, name, column, columns.toList.indexOf(column), delimiter)
+                case c: CharColumn => DB.storeFixedLength(filename, name, column, columns.toList.indexOf(column), delimiter)
+                case c: VarCharColumn => DB.storeVarLength(filename, name, column, columns.toList.indexOf(column), delimiter)
+                case _ => throw new Exception("This column has no index type assigned")
+            }
+
+            if (column.indexed) {
+                column match {
+                    case c: Column[String] with VarLength => DB.invertedIndex(this, column, columns.toList.indexOf(column), delimiter)
+                    case _ => Unit
+                }
+            }
+
+        }
+    }
+
+    def getColumn[B](colName: String): B = {
+        columns.find(_.name == colName).get match {
+            case x: B => x
+            case _ => throw new Exception("Column Not found")
+        }
+    }
+
+    override def toString: String = {
+        return columns.toString
+    }
+}
+
+object Table {
+    def apply(name: String): Table = new Table(name)
+}
+
+

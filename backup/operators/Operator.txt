@@ -1,0 +1,194 @@
+package algebra
+
+import java.nio.ByteBuffer
+import java.util.Date
+import main.scala.immutable.{DB, Column}
+
+import scala.collection.mutable
+import scala.collection.mutable._
+import core._
+import helpers.Conversions.{intToBytes, bytesToInt}
+
+
+
+
+
+
+
+
+
+
+
+object Range {
+    val GT = 1
+    val LT = 2
+    val GTE = 3
+    val LTE = 4
+}
+
+
+
+case class PassResult(result: Result) extends Operator {
+    result.buffer.position(0)
+    def execute: Result = result
+}
+
+case class HashIntersect(a: Operator, b: Operator) extends Operator {
+    def execute: Result = {
+        val start = new Date().getTime() // Start Time
+
+        val result_a: Result = a.execute
+        val result_b: Result = b.execute
+
+        println("Intersect result execute done at: " + (new Date().getTime() - start).toString + "ms") // End Time
+
+        // Allocate memory, we can assume output result will not be bigger than one of the result set + 8 bytes
+        val resultBuffer = ByteBuffer.allocate((result_a.size * 4) + 8)
+
+        // populate results
+        produce(resultBuffer, result_a, result_b)
+
+        println("Intersect completed at: " + (new Date().getTime() - start).toString + "ms") // End Time
+
+        val size = resultBuffer.position / 4
+        resultBuffer.flip
+        Result(resultBuffer, size)
+    }
+
+    def produce(result: ByteBuffer, result_A: Result, result_B: Result) = {
+        var lookup = Set[Int]()
+        val byte = new Array[Byte](4)
+
+        for (i <- 0 to result_A.size - 1) {
+            result_A.buffer.get(byte)
+            lookup += bytesToInt(byte)
+        }
+
+        for (i <- 0 to result_B.size - 1) {
+            result_B.buffer.get(byte)
+            if (lookup.contains(bytesToInt(byte)))
+                result.put(byte)
+        }
+    }
+}
+
+case class Intersect(a: Operator, b: Operator) extends Operator {
+    def execute: Result = {
+        val start = new Date().getTime() // Start Time
+
+        val result_a: Result = a.execute
+        val result_b: Result = b.execute
+
+        println("Intersect result execute done at: " + (new Date().getTime() - start).toString + "ms") // End Time
+
+        val resultBuffer = ByteBuffer.allocate((result_a.size * 4) + 8)
+
+        val buff_b = new Array[Byte](4)
+        val buff_a = new Array[Byte](4)
+
+        var lookup_b = new Array[Int](result_b.size)
+        var lookup_a = new Array[Int](result_a.size)
+        for (i <- 0 to lookup_b.length - 1) { result_b.buffer.get(buff_b); lookup_b(i) = bytesToInt(buff_b) }
+        for (i <- 0 to lookup_a.length - 1) { result_a.buffer.get(buff_a); lookup_a(i) = bytesToInt(buff_a) }
+        lookup_a = lookup_a.sorted
+        lookup_b = lookup_b.sorted
+
+        var counter_b = 0
+        var current_b = lookup_b(0)
+
+        var stopWhile = true
+        for (counter_a <- 0 to lookup_a.length - 1) {
+            var current_a = lookup_a(counter_a)
+
+            while (stopWhile && current_a > current_b) {
+                if (counter_b + 1 <= lookup_b.length) {
+                    counter_b += 1; current_b = lookup_b(counter_b)
+                } else {
+                    stopWhile = false
+                }
+            }
+            stopWhile = true
+
+            if (current_a == current_b) {
+                resultBuffer.put(intToBytes(lookup_a(counter_a)))
+
+                if (counter_b + 1 <= lookup_b.length)
+                    counter_b += 1; current_b = lookup_b(counter_b)
+            }
+        }
+
+        println("Intersect completed at: " + (new Date().getTime() - start).toString + "ms") // End Time
+
+        val size = resultBuffer.position / 4
+        resultBuffer.flip
+        Result(resultBuffer, size)
+    }
+}
+
+//case class HashUnion(a: UnaryOperator, b: UnaryOperator) extends BinaryOperator {
+//    def execute: Result = {
+//        val start = new Date().getTime() // Start Time
+//
+//        val result_a: Result = a.execute
+//        val result_b: Result = b.execute
+//
+//        println("HashUnion result execute done at: " + (new Date().getTime() - start).toString + "ms") // End Time
+//
+//        val resultBuffer = ByteBuffer.allocate(((result_a.size + result_b.size) * 4) + 8)
+//
+//        if (result_a.size < result_b.size) {
+//            produce(resultBuffer, result_a, result_b)
+//        } else {
+//            produce(resultBuffer, result_a, result_b)
+//        }
+//
+//        println("HashUnion completed at: " + (new Date().getTime() - start).toString + "ms") // End Time
+//
+//        val size = resultBuffer.position / 4
+//        resultBuffer.position(0)
+//        Result(resultBuffer, size)
+//    }
+//}
+case class Union(a: Operator, b: Operator) extends Operator {
+    def execute: Result = {
+        val start = new Date().getTime() // Start Time
+
+        val result_a: Result = a.execute
+        val result_b: Result = b.execute
+
+        println("Union result execute done at: " + (new Date().getTime() - start).toString + "ms") // End Time
+
+        // With union size of result can be sum of two buffers
+        val resultBuffer = ByteBuffer.allocateDirect(((result_a.size + result_b.size) * 4) + 8)
+
+        val buff_b = new Array[Byte](4)
+        val buff_a = new Array[Byte](4)
+        var size = 0
+        var unique = Set[Int]()
+
+        for (i <- 0 to result_b.size - 1) {
+            result_b.buffer.get(buff_b)
+            unique += bytesToInt(buff_b)
+
+            if (unique.size > size) {
+                resultBuffer.put(buff_b)
+                size += 1
+            }
+        }
+
+        for (i <- 0 to result_a.size - 1) {
+            result_a.buffer.get(buff_a)
+            unique += bytesToInt(buff_a)
+
+            if (unique.size > size) {
+                resultBuffer.put(buff_a)
+                size += 1
+            }
+        }
+
+        println("Union completed at: " + (new Date().getTime() - start).toString + "ms") // End Time
+
+        resultBuffer.flip
+        Result(resultBuffer, size)
+    }
+}

@@ -1,0 +1,19 @@
+package main.scala.immutable
+
+/**
+ * Created by marcin on 11/20/15.
+ */
+
+object Config {
+    val ReadBufferSize = 4096
+}
+
+object DB extends Engine {
+    var tables = Map[String, Table]()
+
+    def registerTable(table: Table) = tables += (table.name -> table)
+
+    def getTable(tableName: String): Table = tables.get(tableName).get
+
+    def deleteTable(table: Table) = ???
+}

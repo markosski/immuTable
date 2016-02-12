@@ -1,0 +1,306 @@
+package main.scala.immutable
+
+import java.io._
+import java.nio.channels.FileChannel
+import java.nio.{ByteBuffer, MappedByteBuffer}
+
+import helpers.Conversions
+import helpers.Conversions._
+import main.scala.immutable._
+import main.scala.immutable.{Algebra, Result}
+import main.scala.immutable.Table
+
+import scala.collection.mutable
+import scala.collection.mutable.{HashMap, LinkedHashMap}
+import scala.io.Source
+
+/**
+ * Created by marcin on 2/5/16.
+ */
+trait Engine extends Algebra {
+    // Contains start and end integer
+    // TODO: This will cause loosing information about the type, currently type is restored by explicitly
+    // casting it to type of other value entered by the user.
+    val indeces = mutable.Map[String, HashMap[_, Array[Int]]]()
+
+    // attribute ID Heap for inverted index
+    val indexLookups = mutable.Map[String, MappedByteBuffer]()
+
+    // attribute ID Heap for variable length data
+    val mappedDataFiles = mutable.Map[String, MappedByteBuffer]()
+
+    // attribute values
+    val mappedColFiles = mutable.Map[String, MappedByteBuffer]()
+
+    val bf = new BufferManager
+
+    /**
+     *
+     * @param filename
+     * @param tableName
+     * @param column
+     * @param columnPos
+     * @param delimiter
+     * @tparam A
+     *
+     * Each column is represented at most byt 3 files, if not indexed only 1 file.
+     * *.cor - <vID> correlation file representing each row and IDs to .dat files for each column
+     * *.dat - <V> unique values, length depends on data type
+     * *_offsets.idx - <vID, (4, 4)> byte length representing start and end byte in lookup file
+     * *_lookup.idx - block of 4 byte Ints representing correlation IDs (CID)
+     *
+     * TODO: can we order values in hash table in a way we can perform quick lookups on range queries?
+     */
+    def storeFixedLength[A](filename: String, tableName: String, column: Column[A], columnPos: Int, delimiter: String): Unit = {
+        println("Building data for " + column.toString)
+
+        val columnName = column.name
+        val rawDataFile: Source = Source.fromFile(filename) // CSV file
+
+        val colFile = new BufferedOutputStream(
+            new FileOutputStream(f"/Users/marcin/correla/$tableName%s/$columnName%s.col"),
+            4096)
+
+        val valueLookup = HashMap[A, Int]()
+
+        var OID = 0; var parts = Array[String]()
+        for (line <- rawDataFile.getLines()) {
+            parts = line.split(delimiter)
+            colFile.write(column.stringToBytes(
+                 column.stringToValue(parts(columnPos)).toString
+            ))
+        }
+
+        colFile.close()
+    }
+
+    def storeVarLength[A](filename: String, tableName: String, column: Column[A], columnPos: Int, delimiter: String): Unit = {
+        println("Building data for " + column.toString)
+
+        val columnName = column.name
+        val rawDataFile: Source = Source.fromFile(filename) // CSV file
+
+        val colFile = new BufferedOutputStream(
+            new FileOutputStream(f"/Users/marcin/correla/$tableName%s/$columnName%s.col", false),
+            4096)
+        val dataFile = new BufferedOutputStream(
+            new FileOutputStream(f"/Users/marcin/correla/$tableName%s/$columnName%s.dat", false),
+            4096)
+
+        val valueLookup = HashMap[A, Int]()
+
+        var OID = 0
+        for (line <- rawDataFile.getLines()) {
+            val parts = line.split(delimiter)
+            val field_val = column.stringToValue(parts(columnPos))
+
+            if (valueLookup.contains(field_val)) {
+                val pos: Int = valueLookup.get(field_val).get
+                colFile.write(intToBytes(pos))
+            } else {
+                valueLookup.put(field_val, OID * column.size)
+                colFile.write(intToBytes(OID * column.size))
+                dataFile.write(column.stringToBytes(field_val.toString))
+            }
+            OID += 1
+        }
+
+        colFile.close()
+        dataFile.close()
+    }
+
+    def invertedIndex[A](table: Table, column: Column[A], columnPos: Int, delimiter: String): Unit = {
+        val dataFile = new RandomAccessFile(f"/Users/marcin/correla/${table.name}%s/${column.name}%s.dat", "r")
+        val colFile = new RandomAccessFile(f"/Users/marcin/correla/${table.name}%s/${column.name}%s.col", "r")
+        val index = new LinkedHashMap[A, ByteArrayOutputStream]()
+        val pointerSize = 4
+        // Maintain position of unique value
+
+        var i = 0;
+        var colBytes = new Array[Byte](pointerSize);
+        var dataBytes = new Array[Byte](column.size);
+        var buffer = new ByteArrayOutputStream(0)
+        while (i < colFile.length/pointerSize) {
+            colFile.read(colBytes)
+            dataFile.seek(Conversions.bytesToInt(colBytes))
+            dataFile.read(dataBytes)
+
+            if (index.contains(column.bytesToValue(dataBytes))) {
+                buffer = index.get(column.bytesToValue(dataBytes)).get
+                buffer.write(Conversions.intToBytes(i))
+            } else {
+                buffer = new ByteArrayOutputStream(1024)
+                index.put(column.bytesToValue(dataBytes), buffer)
+            }
+
+            i += 1
+        }
+
+        dataFile.close()
+        colFile.close()
+
+        println("...finished writing correlation file")
+
+        if (column.indexed) {
+            println("Building index for " + column.toString)
+            val indexOffsets = new RandomAccessFile(f"/Users/marcin/correla/${table.name}%s/${column.name}%s_offsets.idx", "rw")
+            val indexLookup = new RandomAccessFile(f"/Users/marcin/correla/${table.name}%s/${column.name}%s_lookup.idx", "rw")
+
+            // Construct index by saving contents to index file
+            var startOffset = 0
+            var endOffset = 0
+            index.foreach(item => {
+                startOffset = endOffset
+                endOffset = startOffset + item._2.size
+
+                // offsets at the same locations as data
+                // TODO: if we could save IDs ordered that would shave off some processing time in binary operations.
+                indexOffsets.write(intToBytes(startOffset) ++ intToBytes(endOffset))
+
+                val items: Array[Int] = new Array[Int](item._2.size / 4)
+                val buff = new ByteArrayInputStream(item._2.toByteArray)
+                val bytes = new Array[Byte](4)
+                for (i <- 0 to (item._2.size / 4) - 1) {
+                    buff.read(bytes); items(i) = bytesToInt(bytes)
+                }
+                items.sorted
+                items foreach (item => indexLookup.write(intToBytes(item)))
+            })
+
+            indexOffsets.close()
+            indexLookup.close()
+
+            println("...finished writing data and index for " + column.toString)
+        }
+    }
+
+    def prepareTable(table: Table): Unit = {
+        var threads = List[Thread]()
+
+        for (column <- table.columns) {
+            threads = threads ++ List(
+                new Thread {
+                    override def run: Unit = {
+                        column match {
+                            case c: VarLength => loadVarLengthColumns(table, column)
+                            case c => loadFixedLengthColumn(table, column)
+                        }
+                    }
+                }
+            )
+        }
+
+        threads foreach(thread => thread.start )
+        threads foreach(thread => thread.join)
+    }
+
+    def loadFixedLengthColumn[A](table: Table, column: Column[A]): Unit = {
+        if (column.indexed)
+            loadColumnIndex(table, column)
+
+        val colFile = new RandomAccessFile(f"/Users/marcin/correla/${table.name}%s/${column.name}%s.col", "r")
+        mappedColFiles.put(column.name, colFile.getChannel().map(FileChannel.MapMode.READ_ONLY, 0, colFile.length))
+        colFile.close()
+    }
+
+    def loadVarLengthColumns[A](table: Table, column: Column[A]): Unit = {
+        if (column.indexed)
+            loadColumnIndex(table, column)
+
+        val dataFile = new RandomAccessFile(f"/Users/marcin/correla/${table.name}%s/${column.name}%s.dat", "r")
+        val colFile = new RandomAccessFile(f"/Users/marcin/correla/${table.name}%s/${column.name}%s.col", "r")
+
+        mappedDataFiles.put(column.name, dataFile.getChannel().map(FileChannel.MapMode.READ_ONLY, 0, dataFile.length))
+        mappedColFiles.put(column.name, colFile.getChannel().map(FileChannel.MapMode.READ_ONLY, 0, colFile.length))
+
+        dataFile.close()
+        colFile.close()
+    }
+
+    def loadColumnIndex[A](table: Table, column: Column[A]): HashMap[A, Array[Int]] = {
+        println("Started reading index " + column)
+
+        val indexLookupFile = new RandomAccessFile(f"/Users/marcin/correla/${table.name}%s/${column.name}%s_lookup.idx", "r")
+        indexLookups.put(column.name, indexLookupFile.getChannel().map(FileChannel.MapMode.READ_ONLY, 0, indexLookupFile.length))
+
+        val indexOffsets = new RandomAccessFile(f"/Users/marcin/correla/${table.name}%s/${column.name}%s_offsets.idx", "r")
+        val data = new RandomAccessFile(f"/Users/marcin/correla/${table.name}%s/${column.name}%s.dat", "r")
+
+        val size = (indexOffsets.length / 8)
+        val index = HashMap[A, Array[Int]]()
+
+        for (i <- 0.toLong to size-1) {
+            val dataChunk = new Array[Byte](column.size)
+            val offsetChunk = new Array[Byte](8)
+            data.read(dataChunk)
+            indexOffsets.read(offsetChunk)
+            index.put(column.bytesToValue(dataChunk), Array(bytesToInt(offsetChunk.slice(0, 4)), bytesToInt(offsetChunk.slice(4, 8))))
+        }
+
+        indexLookupFile.close()
+        indexOffsets.close()
+        data.close()
+
+        indeces += (column.name -> index)
+        println("Finished reading index")
+        return index
+    }
+
+    def getOffsets(columnName: String, size: Int, offsets: List[Array[Int]]): ByteBuffer = {
+        var result = ByteBuffer.allocateDirect((size * 4) + 8)
+
+        offsets foreach(offset => {
+            println("Reading data from lookup index...")
+            val indexLookup = indexLookups.get(columnName).get
+            indexLookup.position(offset(0))
+
+            var data = new Array[Byte](4)
+            for (i <- 0 to getOffsetSize(offset) - 1) {
+                indexLookup.get(data)
+                result.put(data)
+            }
+            println("...finished.")
+        })
+
+        result
+    }
+
+    def getOffsetSize(offset: Array[Int]) = (offset(1) - offset(0)) / 4
+
+    def select[A](result: Result, columns: Column[A]*): Int = {
+
+        println("Reading records...")
+        val size = math.min(result.size, 100)
+
+        var counter = 0
+        while (counter < size) {
+            var row = List[Any]()
+
+            var cid = new Array[Byte](4)
+            result.buffer.get(cid)
+
+            for (column <- columns) {
+                val colName = column.name
+                var dataFileData = new Array[Byte](column.size)
+                var corFileData = new Array[Byte](4)
+
+                val corFile: MappedByteBuffer = mappedColFiles.get(column.name).get
+                corFile.position(bytesToInt(cid) * 4)
+                corFile.get(corFileData)
+
+                var corSeek = bytesToInt(corFileData) * column.size
+                val dataFile: MappedByteBuffer = mappedDataFiles.get(column.name).get
+                dataFile.position(corSeek)
+                dataFile.get(dataFileData)
+
+                row = row :+ column.bytesToValue(dataFileData)
+            }
+            println(row)
+            counter += 1
+        }
+        println("Finished reading records.")
+
+        result.buffer.clear
+        result.size
+    }
+}

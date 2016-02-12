@@ -1,0 +1,37 @@
+package main.scala.immutable
+import scala.collection.mutable.HashMap
+import main.scala.immutable.DB
+
+/**
+ * Created by marcin on 2/5/16.
+ */
+trait Algebra {
+    trait Operator {
+//        def execute: Result
+    }
+
+    trait IdVec {}
+
+    // TODO: Consider changing columnName to the column object
+    case class Eq[A](columnName: String, value: A) extends Operator {
+        def execute: Result = {
+            val index = DB.indeces.get(columnName).get.asInstanceOf[HashMap[A, Array[Int]]]
+            val offsets: List[Array[Int]] = List(index.get(value).get)
+            val size = DB.getOffsetSize(offsets(0))
+            val result = DB.getOffsets(columnName, size, offsets)
+            result.position(0)
+            Result(result, size)
+        }
+    }
+
+    case class Select[A](column: Column[A], val1: A, val2: A) extends Operator {
+        def run: IdVec = ???
+    }
+
+    case class Reconstruct[A](column: Column[A], vec: IdVec) extends Operator {
+        def run = {
+            val cls = column.make("age")
+            cls
+        }
+    }
+}

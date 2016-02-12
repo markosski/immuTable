@@ -1,0 +1,29 @@
+package main.scala.immutable.operators
+
+import main.scala.immutable.{Result, Column, DB, Operator}
+
+/**
+ * Created by marcin on 2/5/16.
+ */
+case class Range[A](column: Column[A], value: Int, operator: Int) extends Operator {
+    def execute: Result = {
+        val index = DB.indeces.get(column.name).get.asInstanceOf[HashMap[A, Array[Int]]]
+        val keys: List[Int] = (0 to 100).toList
+        var size = 0
+//        val keys = 0 to 100
+
+        var offsets: List[Array[Int]] = List[Array[Int]]()
+        keys foreach (key => {
+//            if (Compare.gt[A](key, value)) {
+            if (key > value) {
+                val offset = index.get(key.asInstanceOf[A]).get
+                offsets = offsets ++ List(offset)
+                size += DB.getOffsetSize(offset)
+            }
+        })
+
+        val result = DB.getOffsets(column.name, size, offsets)
+        result.flip
+        Result(result, size)
+    }
+}

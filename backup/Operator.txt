@@ -1,0 +1,8 @@
+package main.scala.immutable
+
+/**
+ * Created by marcin on 2/5/16.
+ */
+trait Operator {
+    def execute: Result
+}
