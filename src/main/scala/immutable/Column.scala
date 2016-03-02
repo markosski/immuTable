@@ -1,29 +1,32 @@
-package main.scala.immutable
+package immutable
 
-import main.scala.immutable.helpers.Conversions
+import immutable.helpers.Conversions
 
 import immutable.LoggerHelper._
 
 /**
  * http://ktoso.github.io/scala-types-of-types/
  *
- * @tparam A
  */
+
+sealed trait NumericColumn
+
+sealed trait CharColumn
+
 abstract class Column[A](implicit val ord: Ordering[A]) {
     val name: String
-    val indexed: Boolean
     val size: Int
-    val nullVal: A
+    val nullVal: Any
+    val encoder: Symbol
+    val Type: Symbol
     def stringToValue(s: String): A
     def stringToBytes(s: String): Array[Byte]
     def bytesToValue(bytes: Array[Byte]): A
 }
 
-trait NumericColumn {}
-
-trait CharColumn {}
-
-case class FixedCharColumn(name: String, size: Int, indexed: Boolean=false) extends Column[String] with CharColumn {
+case class FixedCharColumn(name: String, size: Int, encoder: Symbol='Dense)
+        extends Column[String] with CharColumn {
+    val Type = 'FixedCharColumn
     val nullVal = 0.toByte
 
     def stringToValue(s: String): String = {
@@ -37,7 +40,9 @@ case class FixedCharColumn(name: String, size: Int, indexed: Boolean=false) exte
     def bytesToValue(bytes: Array[Byte]): String = new String(bytes.filter(_ != 0))
 }
 
-case class VarCharColumn(name: String, size: Int, indexed: Boolean=false) extends Column[String] with CharColumn {
+case class VarCharColumn(name: String, size: Int, encoder: Symbol='Dense)
+        extends Column[String] with CharColumn {
+    val Type = 'VarCharColumn
     val nullVal = 0.toByte
 
     def stringToValue(s: String): String = {
@@ -52,7 +57,8 @@ case class VarCharColumn(name: String, size: Int, indexed: Boolean=false) extend
     def bytesToValue(bytes: Array[Byte]): String = new String(bytes.filter(_ != 0))
 }
 
-case class DateColumn(name: String, indexed: Boolean=false) extends Column[String] with CharColumn {
+case class DateColumn(name: String, encoder: Symbol='Dense)
+        extends Column[String] with CharColumn {
     /**
       * year: 0-9999 - 2 bytes
       * month: 1-12 - 1 byte
@@ -67,6 +73,7 @@ case class DateColumn(name: String, indexed: Boolean=false) extends Column[Strin
       *
       * @return
       */
+    val Type = 'DateColumn
     val nullVal = 0.toByte
     val size = 7
     def stringToValue(x: String): String = x
@@ -97,7 +104,9 @@ case class DateColumn(name: String, indexed: Boolean=false) extends Column[Strin
     def bytesToValue(bytes: Array[Byte]): String = ???
 }
 
-case class TinyIntColumn(name: String, indexed: Boolean=false) extends Column[Byte] with NumericColumn {
+case class TinyIntColumn(name: String, encoder: Symbol='Dense)
+        extends Column[Byte] with NumericColumn {
+    val Type = 'TinyIntColumn
     val nullVal = Byte.MinValue
     val size = 1
     def stringToValue(s: String): Byte = {
@@ -113,7 +122,9 @@ case class TinyIntColumn(name: String, indexed: Boolean=false) extends Column[By
     def bytesToValue(bytes: Array[Byte]): Byte = bytes(0)
 }
 
-case class ShortIntColumn(name: String, indexed: Boolean=false) extends Column[Short] with NumericColumn {
+case class ShortIntColumn(name: String, encoder: Symbol='Dense)
+        extends Column[Short] with NumericColumn {
+    val Type = 'ShortIntColumn
     val nullVal = Short.MinValue
     val size = 2
     def stringToValue(s: String): Short = {
@@ -129,7 +140,9 @@ case class ShortIntColumn(name: String, indexed: Boolean=false) extends Column[S
     def bytesToValue(bytes: Array[Byte]): Short = bytes.reverse.foldLeft(0)((x, b) => (x << 8) + (b & 0xFF)).toShort
 }
 
-case class IntColumn(name: String, indexed: Boolean=false) extends Column[Int] with NumericColumn {
+case class IntColumn(name: String, encoder: Symbol='Dense)
+        extends Column[Int] with NumericColumn {
+    val Type = 'IntColumn
     val nullVal = Int.MinValue
     val size = 4
     def stringToValue(s: String): Int = {
@@ -145,10 +158,12 @@ case class IntColumn(name: String, indexed: Boolean=false) extends Column[Int] w
     def bytesToValue(bytes: Array[Byte]): Int = bytes.reverse.foldLeft(0)((x, b) => (x << 8) + (b & 0xFF))
 }
 
-case class DecimalColumn(name: String, indexed: Boolean=false) extends Column[Double] with NumericColumn {
+case class DecimalColumn(name: String, encoder: Symbol='Dense)
+        extends Column[Double] with NumericColumn {
     /**
      * http://stackoverflow.com/questions/9810010/scala-library-to-convert-numbers-int-long-double-to-from-arraybyte
      */
+    val Type = 'DecimalColumn
     val nullVal = 0.toByte
     val size = 8
     def stringToBytes(s: String) = {

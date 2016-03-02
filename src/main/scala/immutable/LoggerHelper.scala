@@ -9,8 +9,16 @@ import org.apache.log4j.Logger
   */
 object LoggerHelper {
     BasicConfigurator.configure()
+
     val log = Logger.getLogger("immutable")
-    log.setLevel(Level.INFO)
+
+    Config.loggerLevel match {
+        case 'debug => log.setLevel(Level.DEBUG)
+        case 'info => log.setLevel(Level.INFO)
+        case 'warn => log.setLevel(Level.WARN)
+        case 'error => log.setLevel(Level.ERROR)
+    }
+
     def info(message: String) = log.info(message)
     def warn(message: String) = log.warn(message)
     def error(message: String) = log.error(message)

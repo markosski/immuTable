@@ -1,11 +1,11 @@
-package main.scala.immutable.experiments
+package immutable.experiments
 
 import java.io.RandomAccessFile
 import java.nio.{MappedByteBuffer, ByteBuffer}
 import java.nio.channels.FileChannel
 import java.util.Date
 
-import main.scala.immutable.BufferManager
+import immutable.BufferManager
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -13,7 +13,7 @@ import scala.concurrent._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.{DurationConversions, Duration}
 import scala.util.{Success, Failure, Try}
-import main.scala.immutable.helpers.Conversions._
+import immutable.helpers.Conversions._
 import java.util.Arrays
 import scala.collection.mutable.ArrayBuffer
 
@@ -51,8 +51,9 @@ object SingleVSManyThreadScan extends App {
     def readSingleBuffered(tableName: String, columnName: String) = {
         val start = new Date().getTime()
         val colFile = new RandomAccessFile(f"/Users/marcin/correla/$tableName%s/$columnName%s.col", "r")
+//        val colFile = new RandomAccessFile(f"/Users/marcin/correla/correla_dataset_small/score1.dat", "r")
         val size = 100000000
-        // val colFileMapped = colFile.getChannel().map(FileChannel.MapMode.READ_ONLY, 0, colFile.length)
+         val colFileMapped = colFile.getChannel().map(FileChannel.MapMode.READ_ONLY, 0, colFile.length)
 
         val stageResult = ByteBuffer.allocate(size)
         val pageSize = 4096
@@ -232,8 +233,7 @@ object SingleVSManyThreadScan extends App {
 
     def readWithBufferManager(tableName: String, columnName: String) = {
         val futures = mutable.MutableList[Future[ByteBuffer]]()
-        val bf = new BufferManager()
-        bf.registerFromFile(columnName, s"/Users/marcin/correla/$tableName/$columnName.col", 4)
+        BufferManager.registerFromFile(columnName, s"/Users/marcin/correla/$tableName/$columnName.col", 4)
 
         def run = {
             def stage(mmap: MappedByteBuffer) = {
@@ -261,7 +261,7 @@ object SingleVSManyThreadScan extends App {
             }
 
             val start = new Date().getTime()
-            for (mmap <- bf.getAll(columnName)) futures += Future(stage(mmap))
+            for (mmap <- BufferManager.getAll(columnName)) futures += Future(stage(mmap))
             val futRes = Future.sequence(futures)
             Await.ready(futRes, Duration.Inf)
 //            stage(bf.get(columnName)(0))
@@ -345,7 +345,7 @@ object SingleVSManyThreadScan extends App {
     }
 
     def readMemoryOnlyArray(tableName: String, columnName: String) = {
-        val size = 10000000
+        val size = 1000000
         val ch = new RandomAccessFile(f"/Users/marcin/correla/$tableName%s/$columnName%s.col", "r").getChannel
         val array = new Array[Array[Byte]](size)
         val buffer = ByteBuffer.allocate(size)
@@ -380,14 +380,14 @@ object SingleVSManyThreadScan extends App {
         buffer.clear
     }
 
-//    readSingleBuffered("test_table_100mil", "age")
+    readSingleBuffered("test_table_100mil", "age")
 //    readSinglePassNoBuffer("test_table_100mil", "age")
 
 //    readSingleBufferedMultiThread("test_table_100mil", "age")
 //    readSingleBufferedMultiThread("test_table_100mil", "age")
 //    readSingleBufferedNoMmapMultiThread("test_table_100mil", "age")
 //    readSingleBufferedNoMmapMultiThread("test_table_100mil", "age")
-    readMemoryOnlyFixedArray("test_table_100mil", "age")
+//    readMemoryOnlyFixedArray("test_table_100mil", "age")
 //    readMemoryOnlyArray("test_table_100mil", "age")
 //    readWithBufferManager("test_table_100mil", "age")
 //

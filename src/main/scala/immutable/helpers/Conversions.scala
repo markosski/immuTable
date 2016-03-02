@@ -1,4 +1,4 @@
-package main.scala.immutable.helpers
+package immutable.helpers
 
 /**
  * Created by marcin on 9/10/15.

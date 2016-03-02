@@ -1,11 +1,11 @@
 
-package main.scala.immutable.imprints
+package immutable.imprints
 
 import java.io.{BufferedInputStream, BufferedOutputStream, RandomAccessFile}
 import java.nio.channels.FileChannel
 import java.util.Date
 
-import main.scala.immutable.helpers._
+import immutable.helpers._
 import math.random
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

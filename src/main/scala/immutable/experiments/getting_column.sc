@@ -7,7 +7,7 @@
  */
 
 // Why traits can be used instead of abstract classes
-trait Column[+A] {
+trait Column[A] {
     val name: String
 }
 
@@ -20,7 +20,7 @@ case class StringColumn(name: String) extends Column[String] {
 
 val columns = List(IntColumn("int_column"), StringColumn("string_column"))
 
-def getColumn[B](cols: List[Column[Any]], col_name: String): B = {
+def getColumn[B](cols: List[Column[_]], col_name: String): B = {
     cols.find(_.name == col_name).get match {
         case x: B => x
         case _ => throw new Exception("Column Not found")

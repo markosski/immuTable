@@ -1,7 +1,6 @@
 package immutable
 
-import main.scala.immutable._
-
+import immutable.encoders.{RunLength, Dense}
 import scala.io.Source
 
 /**
@@ -13,11 +12,10 @@ case class SourceCSV(filename: String, delim: Char, skipHeader: Boolean = false,
 object DataLoader {
     /**
       *
-      * @param name - Relation name
+      * @param table - Relation/Table
       * @param csv - SourceCSV object
-      * @param cols - sequence of Column to represent data source
       */
-    def fromCsv(name: String, csv: SourceCSV, cols: Column[_]*) = {
+    def fromCsv(table: Table, csv: SourceCSV) = {
         val csvFile: Source = Source.fromFile(csv.filename)
         val lines = csvFile.getLines()
 
@@ -25,46 +23,45 @@ object DataLoader {
 
         val firstLine = lines.next.split(csv.delim)
 
-        if (firstLine.size != cols.size)
-            throw new Exception("Number of columns in source file and data definition does not match")
+        if (firstLine.size != table.columns.size)
+            throw new Exception("Number of columns in source file and table does not match")
 
         var counter = 0
-        for (col <- cols) {
-            Dense(col, name).encode(counter, csv)
+        for (col <- table.columns) {
+            col.encoder match {
+                case 'Dense => Dense(col, table).encode(counter, csv)
+                case 'RunLength => RunLength(col, table).encode(counter, csv)
+                case _ => throw new Exception(s"Unknown encoder ${col.encoder}.")
+            }
             counter += 1
         }
     }
 }
 
 object DataLoaderMain extends App {
-//    val filename = "/Users/marcin/correla/Salaries.csv"
-//    val csv = SourceCSV(filename, ',', skipHeader = true, skipRows = 1)
-//
-//    DataLoader.fromCsv(
-//        "baseball",
-//        csv,
-//        ShortIntColumn("year"),
-//        FixedCharColumn("teamid", 3),
-//        FixedCharColumn("lgid", 2),
-//        VarCharColumn("player", 15),
-//        IntColumn("salary")
-//    )
+    def small = {
+        val table = Table.loadTable("correla_dataset_small")
+        val filename = "/Users/marcin/correla/correla_dataset_small.csv"
+        val csv = SourceCSV(filename, '|', skipRows = 0)
 
-    val filename = "/Users/marcin/correla/correla_dataset_small.csv"
-    val csv = SourceCSV(filename, '|', skipRows = 0)
+        DataLoader.fromCsv(table, csv)
+    }
 
-    DataLoader.fromCsv(
-        "correla_dataset_small",
-        csv,
-        TinyIntColumn("age"),
-        VarCharColumn("fname", 15),
-        VarCharColumn("lname", 30),
-        VarCharColumn("city", 30),
-        FixedCharColumn("state", 2),
-        FixedCharColumn("zip", 5),
-        TinyIntColumn("score1"),
-        TinyIntColumn("score2"),
-        TinyIntColumn("score3"),
-        TinyIntColumn("score4")
-    )
+    def big = {
+        val filename = "/Users/marcin/correla/correla_dataset_100mil.csv"
+        val csv = SourceCSV(filename, '|', skipRows = 0)
+
+        val table = Table(
+            "immutable2_100mil",
+            TinyIntColumn("age", encoder='RunLength),
+            VarCharColumn("fname", 15),
+            VarCharColumn("city", 30),
+            FixedCharColumn("state", 2, encoder='RunLength),
+            FixedCharColumn("zip", 5)
+        )
+
+        DataLoader.fromCsv(table, csv)
+    }
+
+    big
 }
