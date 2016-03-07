@@ -2,9 +2,8 @@ package immutable.operators
 
 import java.nio.ByteBuffer
 
-import immutable.{Contains, Range, Exact, Table}
+import immutable._
 import immutable.encoders.{Encoder, Intermediate}
-import immutable.{VarCharColumn, NumericColumn, Column}
 import immutable.LoggerHelper._
 
 /**
@@ -22,7 +21,7 @@ object Select {
             debug("Using intermediate.")
             iter = Intermediate(pred.col, table).iterator
         }
-        val result = ByteBuffer.allocate(table.size * 4)
+        val result = ByteBuffer.allocateDirect(table.size * 4)
         val minVal = pred.col.stringToValue(pred.min)
         val maxVal = pred.col.stringToValue(pred.max)
 
@@ -48,7 +47,7 @@ object Select {
             iter = Intermediate(pred.col, table).iterator
         }
 
-        val result = ByteBuffer.allocate(table.size * 4)
+        val result = ByteBuffer.allocateDirect(table.size * 4)
 
         val exactVal = pred.col match {
             case col: VarCharColumn => pred.value.map(x => x.toInt)
@@ -77,12 +76,32 @@ object Select {
 
         val result = ByteBuffer.allocate(table.size * 4)
 
-        val exactVal = pred.col.stringToValue(pred.value)
-
         info(s"Start Select scan ${pred.col.name} ${pred.value}")
         while(iter.hasNext) {
             val tuple = iter.next
             if (pred.value.contains(tuple._2)) result.putInt(tuple._1)
+        }
+        info(s"End Select scan")
+        result.flip
+        result
+    }
+
+    def apply[A](pred: Func[A], useIntermediate: Boolean)(implicit table: Table): ByteBuffer = {
+        info("Enter Select")
+        Operator.prepareBuffer(pred.col, table)
+
+        var iter = Encoder.getColumnIterator(pred.col, table)
+        if (useIntermediate) {
+            debug("Using intermediate.")
+            iter = Intermediate(pred.col, table).iterator
+        }
+
+        val result = ByteBuffer.allocate(table.size * 4)
+
+        info(s"Start Select scan ${pred.col.name} ${pred.func}")
+        while(iter.hasNext) {
+            val tuple = iter.next
+            if (pred.func(tuple._2)) result.putInt(tuple._1)
         }
         info(s"End Select scan")
         result.flip

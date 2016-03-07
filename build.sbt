@@ -18,6 +18,8 @@ libraryDependencies += "org.spire-math" %% "jawn-parser" % "0.8.3"
 // use this if you want jawn's parser and also jawn's ast
 libraryDependencies += "org.spire-math" %% "jawn-ast" % "0.8.3"
 
+libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.11.7"
+
 javaOptions += "-Xms512m"
 
 javaOptions += "-Xmx2g"

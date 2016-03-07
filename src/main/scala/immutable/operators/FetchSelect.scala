@@ -3,7 +3,7 @@ package immutable.operators
 import java.nio.ByteBuffer
 
 import immutable.{Range, Exact, Table}
-import immutable.encoders.{Encoder, Intermediate}
+import immutable.encoders.{Dict, Encoder, Intermediate}
 import immutable.{VarCharColumn, NumericColumn, Column}
 import immutable.LoggerHelper._
 
@@ -22,10 +22,15 @@ object FetchSelect {
             debug("Using intermediate.")
             iter = Intermediate(pred.col, table).iterator
         }
-        val result = ByteBuffer.allocate(oidBuffer.limit)
-        val exactVal = pred.col match {
-            case col: VarCharColumn => pred.value.map(x => x.toInt)
-            case _ => pred.value.map(x => pred.col.stringToValue(x))
+        val result = ByteBuffer.allocateDirect(oidBuffer.limit)
+
+        val exactVal = {
+            if (pred.col.encoder == 'Dict) {
+                val lookup = Dict(pred.col, table).lookup
+                pred.value.map(x => lookup.get(pred.col.stringToValue(x)).get)
+            } else {
+                pred.value.map(x => pred.col.stringToValue(x))
+            }
         }
 
         var tuple = iter.next
@@ -57,7 +62,7 @@ object FetchSelect {
             debug("Using intermediate.")
             iter = Intermediate(pred.col, table).iterator
         }
-        val result = ByteBuffer.allocate(oidBuffer.limit)
+        val result = ByteBuffer.allocateDirect(oidBuffer.limit)
         val minVal = pred.col.stringToValue(pred.min)
         val maxVal = pred.col.stringToValue(pred.max)
 

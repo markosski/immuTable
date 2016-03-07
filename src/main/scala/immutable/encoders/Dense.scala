@@ -14,7 +14,60 @@ import scala.util.{Failure, Success}
   * Created by marcin on 2/26/16.
   */
 
-case class Dense[A](col: Column[A], table: Table) extends Encoder(col, table) with CSVEncoder with Iterable[(Int, A)] {
+case class Dense[A](col: Column[A], table: Table) extends Encoder(col, table) with Iterable[(Int, A)] {
+    def loader = col match {
+        case col: NumericColumn[A] => new DenseLoader(col, table)
+        case col: FixedCharColumn => new DenseLoader(col, table)
+        case col: VarCharColumn => new DenseVarCharLoader(col, table)
+        case _ => throw new Exception("Unsupported column type for this encoder.")
+    }
+
+    def iterator = col match {
+        case col: NumericColumn[A] => new FixedCharNumericIterator[A](col)
+        case col: FixedCharColumn => new FixedCharNumericIterator[A](col)
+        case col: VarCharColumn => new VarCharIterator[A](col)
+        case _ => throw new Exception("Unsupported column type for this iterator.")
+    }
+
+    class DenseVarCharLoader(col: Column[A], table: Table) extends Loader {
+        val varFile = new BufferedOutputStream(
+            new FileOutputStream(s"${Config.home}/${table.name}/${col.name}.densevar", false),
+            Config.readBufferSize)
+
+        def load(data: Vector[String]): Unit = {
+            var i = 0
+            while (i < data.size) {
+                val field_val: A = col.stringToValue(data(i))
+                val itemSize = math.min(col.stringToBytes(data(i)).length, col.size)
+                varFile.write(itemSize.toByte)
+                varFile.write(col.stringToBytes(field_val.toString))
+
+                i += 1
+            }
+        }
+
+        def finish: Unit = {
+            varFile.close()
+        }
+    }
+
+    class DenseLoader(col: Column[A], table: Table) extends Loader {
+        val colFile = new BufferedOutputStream(
+            new FileOutputStream(s"${Config.home}/${table.name}/${col.name}.dense", false),
+            Config.readBufferSize)
+
+        def load(data: Vector[String]): Unit = {
+            var i = 0
+            while (i < data.size) {
+                val field_val = col.stringToBytes(data(i))
+                colFile.write(field_val)
+                i += 1
+            }
+        }
+        def finish = {
+            colFile.close
+        }
+    }
 
     class FixedCharNumericIterator[A](col: Column[A], seek: Int=0) extends Iterator[(Int, A)] {
         val file = BufferManager.get(col.name)
@@ -39,42 +92,15 @@ case class Dense[A](col: Column[A], table: Table) extends Encoder(col, table) wi
         }
     }
 
-    class VarCharDictIterator[A](col: Column[A], seek: Int=0) extends Iterator[(Int, A)] {
-        val bofFile = BufferManager.get(col.name)
-        seek(seek)
-
-        var bytes = new Array[Byte](4)
-        var counter = 0
-        def next = {
-            bofFile.get(bytes)
-            counter += 1
-            (counter - 1, Conversions.bytesToInt(bytes).asInstanceOf[A])
-        }
-
-        def hasNext = {
-            if (counter < table.size) true
-            else false
-        }
-
-        def seek(loc: Int) = {
-            bofFile.position(loc * 4)
-            counter = loc
-        }
-    }
-
     class VarCharIterator[A](col: Column[A], seek: Int=0) extends Iterator[(Int, A)] {
         val varFile = BufferManager.get(col.name)
 
-        var bytes = new Array[Byte](4)
         var counter = 0
         def next = {
-            var bytes = Array[Byte]()
-            var byte: Byte = varFile.get()  // gets byte
+            val byte: Byte = varFile.get()  // gets byte containing value size
+            val bytes = new Array[Byte](byte)
 
-            while (byte.toInt != 0) {
-                bytes = bytes ++ Array[Byte](byte)
-                byte = varFile.get()  // gets byte
-            }
+            varFile.get(bytes)
 
             counter += 1
             (counter - 1, col.bytesToValue(bytes))
@@ -84,90 +110,6 @@ case class Dense[A](col: Column[A], table: Table) extends Encoder(col, table) wi
             if (counter < table.size) true
             else false
         }
-    }
-
-    lazy val iterator = col match {
-        case col: VarCharColumn => new VarCharDictIterator(col)
-        case col: FixedCharColumn => new FixedCharNumericIterator(col)
-        case col: NumericColumn => new FixedCharNumericIterator(col)
-        case _ => throw new Exception("Unknown column type")
-    }
-
-    def encode(pos: Int, csv: SourceCSV): Unit = {
-        col match {
-            case col: VarCharColumn => encodeVarChar(pos, csv)
-            case col: FixedCharColumn => encodeFixedCharNumeric(pos, csv)
-            case col: NumericColumn => encodeFixedCharNumeric(pos, csv)
-        }
-    }
-
-    private def encodeFixedCharNumeric(pos: Int, csv: SourceCSV) = {
-        val csvFile: Source = Source.fromFile(csv.filename) // CSV file
-        val colFile = new BufferedOutputStream(
-                new FileOutputStream(s"${Config.home}/${table.name}/${col.name}.dat", false),
-                Config.readBufferSize)
-
-        var parts = Array[String]()
-        var counter = 0
-        info("Reading lines from csv file for encoding selected column...")
-        for (line <- csvFile.getLines()) {
-            if (csv.skipRows > 0 && counter < csv.skipRows) {
-                info("Skipping first row of csv file.")
-            } else {
-                parts = line.split(csv.delim)
-                val field_val = col.stringToValue(parts(pos))
-                colFile.write(
-                    col.stringToBytes(
-                        field_val.toString
-                    )
-                )
-            }
-            counter += 1
-        }
-        info("...finished encoding.")
-        csvFile.close()
-        colFile.close()
-    }
-
-    private def encodeVarChar(pos: Int, csv: SourceCSV) = {
-        val csvFile: Source = Source.fromFile(csv.filename) // CSV file
-        val bofFile = new BufferedOutputStream(
-                new FileOutputStream(s"${Config.home}/${table.name}/${col.name}.bof", false),
-                Config.readBufferSize)
-        val varFile = new BufferedOutputStream(
-            new FileOutputStream(s"${Config.home}/${table.name}/${col.name}.var", false),
-            Config.readBufferSize)
-
-        val offsetLookup = mutable.HashMap[A, Int]()
-        var OID: Int = 0
-        var counter: Int = 0
-        var bytesWritten: Int = 0
-
-        for (line <- csvFile.getLines()) {
-            if (csv.skipRows > 0 && counter <= csv.skipRows) {
-                // skipping
-            } else {
-                val parts = line.split(csv.delim)
-                val field_val: A = col.stringToValue(parts(pos))
-
-                if (offsetLookup.contains(field_val)) {
-                    val offset: Int = offsetLookup.get(field_val).get
-                    bofFile.write(Conversions.intToBytes(offset))
-                } else {
-                    bofFile.write(Conversions.intToBytes(bytesWritten))
-                    varFile.write(
-                        col.stringToBytes(field_val.toString) ++ Array[Byte](0)
-                    )
-                    offsetLookup.put(field_val, bytesWritten)
-                    bytesWritten += field_val.toString.length + 1 // + null byte
-                }
-                OID += 1
-            }
-            counter += 1
-        }
-        csvFile.close()
-        bofFile.close()
-        varFile.close()
     }
 }
 

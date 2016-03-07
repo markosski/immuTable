@@ -13,8 +13,11 @@ import scala.io.Source
   * Created by marcin on 2/26/16.
   */
 
-case class RunLength[A](col: Column[A], table: Table) extends Encoder(col, table) with CSVEncoder with Iterable[(Int, A)] {
+case class RunLength[A](col: Column[A], table: Table) extends Encoder(col, table) with Iterable[(Int, A)] {
     private val repeatValueSize = 2
+
+    def iterator = new FixedRunLengthIterator(col)
+    def loader = new RunLengthLoader(col, table)
 
     class FixedRunLengthIterator[A](col: Column[A], seek: Int=0) extends Iterator[(Int, A)] {
         val rlnFile = BufferManager.get(col.name)
@@ -48,38 +51,18 @@ case class RunLength[A](col: Column[A], table: Table) extends Encoder(col, table
         }
     }
 
-    lazy val iterator = new FixedRunLengthIterator(col)
-
-    def encode(pos: Int, csv: SourceCSV) = {
-        col match {
-            case col: FixedCharColumn => encodeFixedCharNumeric(pos, csv)
-            case col: NumericColumn => encodeFixedCharNumeric(pos, csv)
-            case _ => new Exception("This column type is not supported by RunLenght encoder.")
-        }
-    }
-
-    private def encodeFixedCharNumeric(pos: Int, csv: SourceCSV) = {
-        val csvFile: Source = Source.fromFile(csv.filename) // CSV file
-
+    class RunLengthLoader(col: Column[A], table: Table) extends Loader {
         val colFile = new BufferedOutputStream(
             new FileOutputStream(s"${Config.home}/${table.name}/${col.name}.rle", false),
             Config.readBufferSize)
 
-        var parts = Array[String]()
-        var repeat: Int = 0
-        var lastValue = ""
-        var currentValue = ""
-        var counter = 0
-        for (line <- csvFile.getLines()) {
-            if (csv.skipRows > 0 && counter < csv.skipRows) {
-                // skipping
-            } else {
-                parts = line.split(csv.delim)
-                currentValue = parts(pos)
+        def load(data: Vector[String]) = {
+            var repeat: Int = 0
+            var lastValue = ""
+            var i = 0
 
-                if (counter - csv.skipRows == 0) {
-                    repeat = 1
-                } else if (currentValue == lastValue && repeat <= Short.MaxValue ) {
+            while (i < data.size) {
+                if (data(i) == lastValue && repeat <= Short.MaxValue ) {
                     repeat += 1
                 } else {
                     colFile.write(
@@ -88,11 +71,14 @@ case class RunLength[A](col: Column[A], table: Table) extends Encoder(col, table
                     repeat = 1
                 }
 
-                lastValue = currentValue
+                lastValue = data(i)
+                i += 1
             }
-            counter += 1
         }
-        colFile.close()
+
+        def finish = {
+            colFile.close()
+        }
     }
 }
 

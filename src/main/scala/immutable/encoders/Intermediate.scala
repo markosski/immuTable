@@ -13,7 +13,8 @@ import immutable._
   * Created by marcin on 2/26/16.
   */
 
-case class Intermediate[A](col: Column[A], table: Table) extends Encoder(col, table) with IntermediateEncoder with Iterable[(Int, A)] {
+case class Intermediate[A](col: Column[A], table: Table) extends Encoder(col, table) with Iterable[(Int, A)] {
+    def iterator = new IntermediateIterator[A](col)
 
     class IntermediateIterator[A](col: Column[A], seek: Int=0) extends Iterator[(Int, A)] {
         val file = BufferManager.get(s"${col.name}_0")
@@ -48,8 +49,6 @@ case class Intermediate[A](col: Column[A], table: Table) extends Encoder(col, ta
             counter = loc
         }
     }
-
-    lazy val iterator = new IntermediateIterator[A](col)
 
     def encode(buffer: ByteBuffer): Unit = {
         val interFile = new BufferedOutputStream(

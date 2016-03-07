@@ -4,6 +4,7 @@ import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 
 import immutable._
+import immutable.{NumericColumn}
 import immutable.helpers._
 
 import scala.collection.mutable.HashMap
@@ -15,12 +16,13 @@ import immutable.LoggerHelper._
   * Created by marcin on 2/26/16.
   */
 
-trait CSVEncoder {
-    def encode(pos: Int, csv: SourceCSV): Unit
+trait Loader {
+    def load(data: Vector[String]): Unit
+    def finish: Unit
 }
 
-trait IntermediateEncoder {
-    def encode(buffer: ByteBuffer): Unit
+trait Loadable {
+    def loader: Loader
 }
 
 abstract class Encoder[A](col: Column[A], table: Table) {
@@ -48,9 +50,9 @@ abstract class Encoder[A](col: Column[A], table: Table) {
             while (nextChar != 10.toByte) {
                 nextChar = csvFile.readByte()
             }
-            var line = csvFile.readLine()
-            var parts = line.split(csv.delim)
-            var value = col.stringToValue(parts(pos))
+            val line = csvFile.readLine()
+            val parts = line.split(csv.delim)
+            val value = col.stringToValue(parts(pos))
 
             if (values.contains(value))
                 values.put(value, values.get(value).get + 1)
@@ -60,27 +62,26 @@ abstract class Encoder[A](col: Column[A], table: Table) {
         csvFile.close()
 
         col match {
-            case x: NumericColumn => NumericColumnStats(rows, values.size, values.min._1, values.max._1)
+            case x: NumericColumn[A] => NumericColumnStats(rows, values.size, values.min._1, values.max._1)
             case x: CharColumn => StringColumnStats(rows, values.size)
         }
     }
 }
 
 object Encoder {
-    def getColumnIterator[A](col: Column[A], table: Table, seek: Int=0): Iterator[(Int, A)] = {
+    def getColumnIterator[A](col: Column[A], table: Table): Iterator[(Int, A)] = {
         col.encoder match {
-            case 'Dense => Dense(col, table).iterator
             case 'RunLength => RunLength(col, table).iterator
+            case 'DensePage => col match {
+                case col: Column[A] with NumericColumn[A] => DensePage(col, table).iterator
+                case _ => throw new Exception("Blah")
+            }
+            case 'Dense => Dense(col, table).iterator
+            case 'Dict => Dict(col, table).iterator
             case 'Intermediate => Intermediate(col, table).iterator
+            case _ => throw new Exception("Unknown encoder!")
         }
     }
-
-//    def getExtension[A](col: Column[A]): String = {
-//        col match {
-//            case x: Dense => ".dat"
-//            case x: RunLength => ".rle"
-//        }
-//    }
 }
 
 

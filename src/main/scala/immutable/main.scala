@@ -12,18 +12,21 @@ import java.util.Date
   */
 object Main extends App {
     def small = {
-        implicit val table = Table.loadTable("correla_dataset_small")
+        implicit val table = Table.loadTable("correla_dataset_small_new")
 
-        BufferManager.registerFromFile("age_0", s"${Config.home}/${table.name}/age_0.inter", 4)
-        BufferManager.registerFromFile("state_0", s"${Config.home}/${table.name}/state_0.inter", 4)
+//        BufferManager.registerFromFile("age_0", s"${Config.home}/${table.name}/age_0.inter", 4)
+//        BufferManager.registerFromFile("state_0", s"${Config.home}/${table.name}/state_0.inter", 4)
 //        BufferManager.registerFromFile("score1_0", s"${Config.home}/${table.name}/score1_0.inter", 4, parts=Some(1))
 //        BufferManager.registerFromFile("score2_0", s"${Config.home}/${table.name}/score2_0.inter", 4, parts=Some(1))
 
         info("start --")
 
-        val res = Select(Range(table.getColumn[TinyIntColumn]("age"), "18", "25"), true)
-        val res1 = FetchSelect(Exact(table.getColumn[FixedCharColumn]("state"), List("CT", "NY", "NJ")), res, true)
-        val res2 = FetchSelect(Range(table.getColumn[TinyIntColumn]("score2"), "80", "100"), res1, false)
+//        val res = Select(Func(table.getColumn[TinyIntColumn]("age"), (x: Byte) => { if (x == "55".toByte) true else false }), false)
+        val res = Select(Range(table.getColumn[TinyIntColumn]("age"), "18", "75"), false)
+//        val res1 = FetchSelect(Exact(table.getColumn[VarCharColumn]("fname"), List("Bristol", "Melissa")), res, false)
+//        val res2 = FetchSelect(Exact(table.getColumn[FixedCharColumn]("state"), List("CT", "NY", "NJ")), res, false)
+//        val res3 = FetchSelect(Range(table.getColumn[TinyIntColumn]("score2"), "75", "100"), res2, false)
+//        val res4 = FetchSelect(Range(table.getColumn[TinyIntColumn]("score3"), "75", "100"), res3, false)
 
 //        val inter = Select(table.getColumn[FixedCharColumn]("state"), List("CT", "NY", "NJ"))
 //        val res2 = Union(res, res1)
@@ -33,7 +36,7 @@ object Main extends App {
 //        Intermediate(table.getColumn[FixedCharColumn]("state"), table).encode(inter)
 
         info("end --")
-        info("result: " + res2.limit/4)
+        info("result: " + res.limit/4)
     }
 
     def big = {

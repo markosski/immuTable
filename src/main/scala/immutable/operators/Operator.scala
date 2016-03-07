@@ -12,13 +12,18 @@ import scala.util.{Try, Failure, Success}
 object Operator {
     def prepareBuffer[A](col: Column[A], table: Table): Unit = {
         val ext = col match {
-            case x: VarCharColumn => "bof"
-            case x: FixedCharColumn => {
-                if (x.encoder == 'Dense) "dat"
-                else if (x.encoder == 'RunLength) "rle"
+            case x: VarCharColumn => {
+                if (x.encoder == 'Dense) "densevar"
+                else if (x.encoder == 'Dict) "dict"
             }
-            case x: NumericColumn => {
-                if (x.encoder == 'Dense) "dat"
+            case x: FixedCharColumn => {
+                if (x.encoder == 'Dense) "dense"
+                else if (x.encoder == 'RunLength) "rle"
+                else if (x.encoder == 'Dict) "dict"
+            }
+            case x: NumericColumn[_] => {
+                if (x.encoder == 'Dense) "dense"
+                else if (x.encoder == 'DensePage) "densep"
                 else if (x.encoder == 'RunLength) "rle"
             }
         }
