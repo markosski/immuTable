@@ -11,24 +11,17 @@ import scala.collection.mutable
   * Created by marcin on 2/29/16.
   */
 
-case class Dict[A](col: Column[A], table: Table)
-        extends Encoder(col, table) with Loadable with Iterable[(Int, _)] {
+case object Dict extends Encoder {
+    def iterator(col: Column) = new DictIterator(col)
+    def loader(col: Column) = new DictLoader(col)
 
-    col match {
-        case x: CharColumn => Unit
-        case _ => throw new Exception("Dict encoder can only accept char data type.")
-    }
-
-    def iterator = new DictIterator()
-    def loader = new DictLoader()
-
-    def lookup: mutable.HashMap[A, Int] = {
+    def lookup(col: Column): mutable.HashMap[col.A, Int] = {
         // TODO: Lookups should be cached in some global
         val dictValFile = new BufferedInputStream(
-            new FileInputStream(s"${Config.home}/${table.name}/${col.name}.dictval"),
+            new FileInputStream(s"${Config.home}/${col.tblName}/${col.name}.dictval"),
             Config.readBufferSize)
 
-        val lookup = mutable.HashMap[A, Int]()
+        val lookup = mutable.HashMap[col.A, Int]()
 
         val itemSize = Array[Byte](1)
         dictValFile.read(itemSize)  // gets byte containing value size
@@ -49,7 +42,7 @@ case class Dict[A](col: Column[A], table: Table)
         lookup
     }
 
-    class DictIterator(seek: Int=0) extends Iterator[(Int, _)] with SeekableIterator {
+    class DictIterator(col: Column, seek: Int=0) extends Iterator[(Int, _)] with SeekableIterator {
         val bofFile = BufferManager.get(col.name)
         seek(seek)
 
@@ -63,8 +56,11 @@ case class Dict[A](col: Column[A], table: Table)
             (counter - 1, Conversions.bytesToInt(bytes))
         }
 
+        // TODO: We need to get access to table object, for now faking it.
+        val table = 1000000
+
         def hasNext = {
-            if (counter < table.size) true else false
+            if (counter < table) true else false
         }
 
         def seek(loc: Int) = {
@@ -73,13 +69,15 @@ case class Dict[A](col: Column[A], table: Table)
         }
     }
 
-    class DictLoader() extends Loader {
+    case class DictLoader(col: Column) extends Loader {
+        type A = col.A
+
         val bofFile = new BufferedOutputStream(
-            new FileOutputStream(s"${Config.home}/${table.name}/${col.name}.dict", false),
+            new FileOutputStream(s"${Config.home}/${col.tblName}/${col.name}.dict", false),
             Config.readBufferSize)
 
         val varFile = new BufferedOutputStream(
-            new FileOutputStream(s"${Config.home}/${table.name}/${col.name}.dictval", false),
+            new FileOutputStream(s"${Config.home}/${col.tblName}/${col.name}.dictval", false),
             Config.readBufferSize)
 
         val offsetLookup = mutable.HashMap[A, Int]()
@@ -90,7 +88,7 @@ case class Dict[A](col: Column[A], table: Table)
 
             var i: Int = 0
             while (i < data.size) {
-                val field_val: A = col.stringToValue(data(i))
+                val field_val = col.stringToValue(data(i))
                 val itemSize = col.stringToBytes(
                     col.stringToValue(data(i)).toString
                     ).length

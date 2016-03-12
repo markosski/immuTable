@@ -1,6 +1,7 @@
 package immutable.operators
 
 import immutable.LoggerHelper._
+import immutable.encoders.{Dict, Dense}
 import immutable.{Config, Table}
 import immutable._
 
@@ -12,21 +13,19 @@ import scala.util.{Try, Failure, Success}
   */
 object Operator {
     // TODO: This functionality should be somewhere in Encoder.
-    def prepareBuffer(col: Column[_], table: Table): Unit = {
+    def prepareBuffer(col: Column, table: Table): Unit = {
         val ext = col match {
             case x: VarCharColumn => {
-                if (x.encoder == 'Dense) "densevar"
-                else if (x.encoder == 'Dict) "dict"
+                if (x.enc == Dense) "densevar"
+                else if (x.enc == Dict) "dict"
             }
             case x: FixedCharColumn => {
-                if (x.encoder == 'Dense) "dense"
-                else if (x.encoder == 'RunLength) "rle"
-                else if (x.encoder == 'Dict) "dict"
+                if (x.enc == Dense) "dense"
+                else if (x.enc == Dict) "dict"
             }
             case x: NumericColumn => {
-                if (x.encoder == 'Dense) "dense"
-                else if (x.encoder == 'DensePage) "densep"
-                else if (x.encoder == 'RunLength) "rle"
+                if (x.enc == Dense) "dense"
+                else if (x.enc == Dict) "dict"
             }
         }
 

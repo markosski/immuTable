@@ -1,14 +1,10 @@
 package immutable.encoders
 
 import java.io.RandomAccessFile
-import java.nio.ByteBuffer
 
 import immutable._
 import immutable.{NumericColumn}
 import immutable.helpers._
-
-import scala.collection.mutable.HashMap
-import scala.util.Random
 
 import immutable.LoggerHelper._
 
@@ -21,67 +17,13 @@ trait Loader {
     def finish: Unit
 }
 
-trait Loadable {
-    def loader: Loader
-}
-
 trait SeekableIterator {
     def seek(pos: Int): Unit
 }
 
-abstract class Encoder[A](col: Column[A], table: Table) {
-
-    def createStats(pos: Int, csv: SourceCSV): ColumnStats[A] = {
-        import col.ord
-
-        val sampleThresh = 1000
-        val sampleSize = 0.01
-        var rows = 0
-
-        val csvFile = new RandomAccessFile(csv.filename, "r")
-        val csvLength = csvFile.length.toInt
-
-        // TODO: this is wrong!
-        if (csvFile.length / col.size * sampleSize < sampleThresh) rows = sampleThresh
-        else rows = (csvFile.length / col.size * sampleSize).toInt
-
-        val values = HashMap[A, Int]()
-        for (i <- 0 until rows) {
-            var randBytePos = Random.nextInt(csvLength).toLong
-            csvFile.seek(randBytePos)
-
-            var nextChar = csvFile.readByte()
-            while (nextChar != 10.toByte) {
-                nextChar = csvFile.readByte()
-            }
-            val line = csvFile.readLine()
-            val parts = line.split(csv.delim)
-            val value = col.stringToValue(parts(pos))
-
-            if (values.contains(value))
-                values.put(value, values.get(value).get + 1)
-            else
-                values.put(value, 1)
-        }
-        csvFile.close()
-
-        col match {
-            case x: NumericColumn => NumericColumnStats(rows, values.size, values.min._1, values.max._1)
-            case x: CharColumn => StringColumnStats(rows, values.size)
-        }
-    }
-}
-
-object Encoder {
-    def getColumnIterator[A](col: Column[A], table: Table): Iterator[(Int, _)] = {
-        col.encoder match {
-            case 'RunLength => RunLength(col, table).iterator
-            case 'Dense => Dense(col, table).iterator
-            case 'Dict => Dict(col, table).iterator
-            case 'Intermediate => Intermediate(col, table).iterator
-            case _ => throw new Exception("Unknown encoder!")
-        }
-    }
+trait Encoder {
+    def loader(col: Column): Loader
+    def iterator(col: Column): Iterator[(Int, _)]
 }
 
 
@@ -91,7 +33,7 @@ object EncoderMain extends App {
     val start = new Date().getTime()
 
     val table = "correla_dataset_small"
-    val col = TinyIntColumn("age", encoder='RunLength)
+    val col = TinyIntColumn("age", table, Dense)
     val repeatValueSize = 2
 
     val rlnFile = new RandomAccessFile(s"${Config.home}/$table/${col.name}.rle", "r")

@@ -2,7 +2,7 @@ package immutable.encoders
 
 import java.io.{FileOutputStream, BufferedOutputStream}
 
-import immutable.{Config, SourceCSV, Table}
+import immutable.{Config, Table}
 import immutable.helpers.Conversions
 import immutable.LoggerHelper._
 import immutable._
@@ -14,34 +14,31 @@ import scala.util.{Failure, Success}
   * Created by marcin on 2/26/16.
   */
 
-case class Dense[A](col: Column[A], table: Table)
-        extends Encoder(col, table) with Loadable with Iterable[(Int, _)] {
-
-    def loader = col match {
-        case col: NumericColumn => new DenseLoader()
-        case col: FixedCharColumn => new DenseLoader()
-        case col: VarCharColumn => new DenseVarCharLoader()
+case object Dense extends Encoder {
+    def loader(col: Column): Loader = col match {
+        case col: NumericColumn => new DenseLoader(col)
+        case col: FixedCharColumn => new DenseLoader(col)
+        case col: VarCharColumn => new DenseVarCharLoader(col)
         case _ => throw new Exception("Unsupported column type for this encoder.")
     }
 
-//    def iterator = col match {
-//        case col: NumericColumn[A] => new FixedCharNumericIterator()
-//        case col: FixedCharColumn => new FixedCharNumericIterator()
-//        case col: VarCharColumn => new VarCharIterator()
-//        case _ => throw new Exception("Unsupported column type for this iterator.")
-//    }
+    // TODO: Somehow pass table size information
+    def iterator(col: Column): Iterator[(Int, _)] = col match {
+        case col: NumericColumn => new FixedCharNumericIterator(col, 1000000)
+        case col: FixedCharColumn => new FixedCharNumericIterator(col, 1000000)
+        case col: VarCharColumn => new VarCharIterator(col, 1000000)
+        case _ => throw new Exception("Unsupported column type for this iterator.")
+    }
 
-    def iterator = new FixedCharNumericIterator()
-
-    class DenseVarCharLoader() extends Loader {
+    class DenseVarCharLoader(col: Column) extends Loader {
         val varFile = new BufferedOutputStream(
-            new FileOutputStream(s"${Config.home}/${table.name}/${col.name}.densevar", false),
+            new FileOutputStream(s"${Config.home}/${col.tblName}/${col.name}.densevar", false),
             Config.readBufferSize)
 
         def load(data: Vector[String]): Unit = {
             var i = 0
             while (i < data.size) {
-                val field_val: A = col.stringToValue(data(i))
+                val field_val = col.stringToValue(data(i))
                 val itemSize = math.min(col.stringToBytes(data(i)).length, col.size)
                 varFile.write(itemSize.toByte)
                 varFile.write(col.stringToBytes(field_val.toString))
@@ -55,9 +52,9 @@ case class Dense[A](col: Column[A], table: Table)
         }
     }
 
-    class DenseLoader() extends Loader {
+    class DenseLoader(col: Column) extends Loader {
         val colFile = new BufferedOutputStream(
-            new FileOutputStream(s"${Config.home}/${table.name}/${col.name}.dense", false),
+            new FileOutputStream(s"${Config.home}/${col.tblName}/${col.name}.dense", false),
             Config.readBufferSize)
 
         def load(data: Vector[String]): Unit = {
@@ -73,20 +70,20 @@ case class Dense[A](col: Column[A], table: Table)
         }
     }
 
-    class FixedCharNumericIterator(seek: Int=0) extends Iterator[(Int, _)] with SeekableIterator {
+    class FixedCharNumericIterator(col: Column, size: Int, seek: Int=0) extends Iterator[(Int, _)] with SeekableIterator {
         val file = BufferManager.get(col.name)
         seek(seek)
 
         var bytes = new Array[Byte](col.size)
         var counter = 0
-        def next = {
+        def next: (Int, _) = {
             file.get(bytes)
             counter += 1
             (counter - 1, col.bytesToValue(bytes))
         }
 
         def hasNext = {
-            if (counter < table.size) true else false
+            if (counter < size) true else false
         }
 
         def seek(loc: Int) = {
@@ -95,11 +92,11 @@ case class Dense[A](col: Column[A], table: Table)
         }
     }
 
-    class VarCharIterator(seek: Int=0) extends Iterator[(Int, _)] with SeekableIterator {
+    class VarCharIterator(col: Column, size: Int, seek: Int=0) extends Iterator[(Int, _)] with SeekableIterator {
         val varFile = BufferManager.get(col.name)
 
         var counter = 0
-        def next = {
+        def next: (Int, _) = {
             val byte: Byte = varFile.get()  // gets byte containing value size
             val bytes = new Array[Byte](byte)
 
@@ -110,7 +107,7 @@ case class Dense[A](col: Column[A], table: Table)
         }
 
         def hasNext = {
-            if (counter < table.size) true else false
+            if (counter < size) true else false
         }
 
         def seek(loc: Int) = {

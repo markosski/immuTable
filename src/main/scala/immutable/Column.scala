@@ -1,48 +1,47 @@
 package immutable
 
 import immutable.helpers.Conversions
-
+import immutable.encoders.{Loader, Encoder}
 import immutable.LoggerHelper._
 import scala.reflect.runtime.universe._
 import scala.Symbol
 
 /**
  * http://ktoso.github.io/scala-types-of-types/
- *
  */
 
-sealed trait NumericColumn {
-    val min: AnyVal
-    val max: AnyVal
-    val nullVal: AnyVal
+trait NumericColumn {
+    type A
+    val min: A
+    val max: A
+    val nullVal: A
 }
 
-sealed trait CharColumn {
+trait CharColumn {
     val nullVal: Byte = 0
 }
 
-abstract class Column[@specialized(Byte, Short, Int) A]
-    (implicit val ord: Ordering[A], implicit val tag: TypeTag[A]) {
+abstract class Column {
+    type A
+    implicit val ord: Ordering[A]
 
     val name: String
+    val tblName: String
     val size: Int
-    val encoder: Symbol
-    val nullRepr = "Null"
+    val enc: Encoder
+    val nullRepr = "NULL"
     def stringToValue(s: String): A
     def stringToBytes(s: String): Array[Byte]
     def bytesToValue(bytes: Array[Byte]): A
     def validate(s: String): Unit
+    def getIterator = enc.iterator(this)
+    def getLoader = enc.loader(this)
 }
 
-object ColumnImplicits {
-    implicit class VarCharToIntColumn(col: VarCharColumn) {
-        def toIntColumn = IntColumn(col.name)
-    }
-}
+case class FixedCharColumn(name: String, tblName: String, size: Int, enc: Encoder) extends Column with CharColumn {
 
-
-case class FixedCharColumn(name: String, size: Int, encoder: Symbol='Dense)
-        extends Column[String] with CharColumn {
+    type A = String
+    val ord = implicitly[Ordering[A]]
 
     def stringToValue(s: String): String = s.slice(0, size)
 
@@ -57,8 +56,10 @@ case class FixedCharColumn(name: String, size: Int, encoder: Symbol='Dense)
     }
 }
 
-case class VarCharColumn(name: String, size: Int, encoder: Symbol='Dense)
-        extends Column[String] with CharColumn {
+case class VarCharColumn(name: String, tblName: String, size: Int, enc: Encoder)
+        extends Column with CharColumn {
+    type A = String
+    val ord = implicitly[Ordering[A]]
 
     def stringToValue(s: String): String = s.slice(0, size)
 
@@ -73,58 +74,12 @@ case class VarCharColumn(name: String, size: Int, encoder: Symbol='Dense)
     }
 }
 
-case class DateColumn(name: String, encoder: Symbol='Dense)
-        extends Column[String] with CharColumn {
-    /**
-      * year: 0-9999 - 2 bytes
-      * month: 1-12 - 1 byte
-      * day: 1-31 - 1 byte
-      * hour: 0-23 - 1 byte
-      * minute: 0-59 - 1 byte
-      * second: 0-59 - 1 byte
-      *
-      * Accepted formats:
-      * 9999-12-31
-      * 9999-12-31 00:00:00
-      *
-      * @return
-      */
-    val size = 7
-    def stringToValue(x: String): String = x
-    def stringToBytes(x: String): Array[Byte] = {
-        def parseDate(date: String): Array[Byte] = {
-            val parts = date.split('-')
-            Conversions.shortToBytes(parts(0).toShort) :+ parts(1).toByte :+ parts(2).toByte
-        }
 
-        def parseTime(time: String): Array[Byte] = {
-            val parts = time.split(':')
-            Array[Byte](parts(0)toByte, parts(1).toByte, parts(2).toByte)
-        }
+case class TinyIntColumn(name: String, tblName: String, enc: Encoder)
+        extends Column with NumericColumn {
+    type A = Byte
+    val ord = implicitly[Ordering[A]]
 
-        var date = Array[Byte]()
-        var time = Array[Byte]()
-        if (x.split(' ').length == 2) {
-            date = parseDate(x.split(' ')(0))
-            time = parseTime(x.split(' ')(1))
-        } else {
-            date = parseDate(x.split(' ')(0))
-            time = Array[Byte](0.toByte, 0.toByte, 0.toByte)
-        }
-        date ++ time
-    }
-    def bytesToValue(bytes: Array[Byte]): String = ???
-
-    def validate(s: String) = {
-        val parts = s.split('-')
-        if (parts.length != 3) {
-            throw new IllegalArgumentException("Wrong time format")
-        }
-    }
-}
-
-case class TinyIntColumn(name: String, encoder: Symbol='Dense)
-        extends Column[Byte] with NumericColumn {
     val nullVal = Byte.MinValue
     val min = (Byte.MinValue + 1).toByte
     val max = Byte.MaxValue
@@ -142,8 +97,11 @@ case class TinyIntColumn(name: String, encoder: Symbol='Dense)
     }
 }
 
-case class ShortIntColumn(name: String, encoder: Symbol='Dense)
-        extends Column[Short] with NumericColumn {
+case class ShortIntColumn(name: String, tblName: String, enc: Encoder)
+        extends Column with NumericColumn {
+    type A = Short
+    val ord = implicitly[Ordering[A]]
+
     val nullVal = Short.MinValue
     val min = (Short.MinValue + 1).toShort
     val max = Short.MaxValue
@@ -163,8 +121,11 @@ case class ShortIntColumn(name: String, encoder: Symbol='Dense)
     }
 }
 
-case class IntColumn(name: String, encoder: Symbol='Dense)
-        extends Column[Int] with NumericColumn {
+case class IntColumn(name: String, tblName: String, enc: Encoder)
+        extends Column with NumericColumn {
+    type A = Int
+    val ord = implicitly[Ordering[A]]
+
     val nullVal = Int.MinValue
     val min = Int.MinValue + 1
     val max = Int.MaxValue
@@ -184,11 +145,14 @@ case class IntColumn(name: String, encoder: Symbol='Dense)
     }
 }
 
-case class DecimalColumn(name: String, encoder: Symbol='Dense)
-        extends Column[Double] with NumericColumn {
+case class DecimalColumn(name: String, tblName: String, enc: Encoder)
+        extends Column with NumericColumn {
     /**
      * http://stackoverflow.com/questions/9810010/scala-library-to-convert-numbers-int-long-double-to-from-arraybyte
      */
+    type A = Double
+    val ord = implicitly[Ordering[A]]
+
     val nullVal = Int.MinValue.toDouble
     val min = Int.MinValue.toDouble + 1
     val max = Int.MaxValue.toDouble

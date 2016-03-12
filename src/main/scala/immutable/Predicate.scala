@@ -1,7 +1,7 @@
 package immutable
 
-sealed trait Predicate[A] {
-    val col: Column[A]
+sealed trait Predicate {
+    val col: Column
 }
 
 /**
@@ -10,7 +10,7 @@ sealed trait Predicate[A] {
   * @param min
   * @param max
   */
-case class Range[A](col: Column[A] with NumericColumn, min: String, max: String) extends Predicate[A] {
+case class Range(col: Column with NumericColumn, min: String, max: String) extends Predicate {
     override def toString: String = s"range__${col.name},${min},${max}"
 }
 
@@ -19,7 +19,7 @@ case class Range[A](col: Column[A] with NumericColumn, min: String, max: String)
   * @param col
   * @param value
   */
-case class Exact[A](col: Column[A], value: Seq[String]) extends Predicate[A] {
+case class Exact(col: Column, value: Seq[String]) extends Predicate {
     override def toString: String = s"exact__${col.name},${value}"
 }
 
@@ -29,16 +29,6 @@ case class Exact[A](col: Column[A], value: Seq[String]) extends Predicate[A] {
   * @param value value to test
   * @param mode -1 = left, 0 = two ways, 1 = right
   */
-case class Contains[A](col: Column[A] with CharColumn, value: String, mode: Int = 0) extends Predicate[A] {
+case class Contains(col: Column with CharColumn, value: String, mode: Int = 0) extends Predicate {
     override def toString: String = s"contains__${col.name},${value}"
-}
-
-/**
-  * Execute function against column value
-  * @param col
-  * @param func
-  * @tparam A
-  */
-case class Filter[A](col: Column[A], func: (A) => Boolean) extends Predicate[A] {
-    override def toString: String = s"func__${func}"
 }
