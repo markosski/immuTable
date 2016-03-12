@@ -64,10 +64,7 @@ object Table {
 
 
                 val newColumn = col.get("type").asString match {
-                    case "TinyIntType" => encoder match {
-                        case 'Dense => TinyIntColumn(name, tblName, Dense)
-                        case 'Dict => TinyIntColumn(name, tblName, Dict)
-                    }
+                    case "TinyIntType" => TinyIntColumn(name, tblName, Dense)
                     case "FixedCharType" => encoder match {
                         case 'Dense => FixedCharColumn(name, tblName, size, Dense)
                         case 'Dict => FixedCharColumn(name, tblName, size, Dict)

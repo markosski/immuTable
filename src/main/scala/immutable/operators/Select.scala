@@ -11,8 +11,7 @@ import immutable.LoggerHelper._
   */
 
 object Select {
-    def apply[A](pred: Range, useIntermediate: Boolean)(implicit table: Table, num: Numeric[A]): ByteBuffer = {
-        type A = pred.col.A
+    def apply(pred: Range, useIntermediate: Boolean)(implicit table: Table): ByteBuffer = {
         info("Enter Select")
         Operator.prepareBuffer(pred.col, table)
 
@@ -25,7 +24,7 @@ object Select {
         info(s"Start Select scan ${pred.col.name} ${pred.min}/${pred.max}")
         while(iter.hasNext) {
             val tuple = iter.next
-            if (pred.col.ord.gteq(tuple._2.asInstanceOf[A], minVal) && pred.col.ord.lteq(tuple._2.asInstanceOf[A], maxVal)) {
+            if (pred.col.ord.gteq(tuple._2.asInstanceOf[pred.col.A], minVal) && pred.col.ord.lteq(tuple._2.asInstanceOf[pred.col.A], maxVal)) {
                 result.putInt(tuple._1)
             }
         }

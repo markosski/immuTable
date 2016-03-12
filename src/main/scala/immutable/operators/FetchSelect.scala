@@ -15,10 +15,9 @@ object FetchSelect {
     def apply(pred: Exact, oidBuffer: ByteBuffer, useIntermediate: Boolean)
                 (implicit table: Table): ByteBuffer = {
         debug("Enter FetchSelect")
-        type A = pred.col.A
         Operator.prepareBuffer(pred.col, table)
 
-        var iter = pred.col.getIterator
+        val iter = pred.col.getIterator
         val result = ByteBuffer.allocateDirect(oidBuffer.limit)
 
         // Special case for Dict encoding where we need to string value has to be converted to Int.
@@ -56,7 +55,7 @@ object FetchSelect {
 
                     while (iter.hasNext && tuple._1 < oid) tuple = iter.next
 
-                    if (tuple._1 == oid && exactVal.contains(tuple._2.asInstanceOf[A])) {
+                    if (tuple._1 == oid && exactVal.contains(tuple._2)) {
                         result.putInt(tuple._1)
                     }
                 }

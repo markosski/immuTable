@@ -42,7 +42,7 @@ case object Dict extends Encoder {
         lookup
     }
 
-    class DictIterator(col: Column, seek: Int=0) extends Iterator[(Int, _)] with SeekableIterator {
+    class DictIterator(col: Column, seek: Int=0) extends Iterator[(Int, Int)] with SeekableIterator {
         val bofFile = BufferManager.get(col.name)
         seek(seek)
 
@@ -70,8 +70,6 @@ case object Dict extends Encoder {
     }
 
     case class DictLoader(col: Column) extends Loader {
-        type A = col.A
-
         val bofFile = new BufferedOutputStream(
             new FileOutputStream(s"${Config.home}/${col.tblName}/${col.name}.dict", false),
             Config.readBufferSize)
@@ -80,7 +78,7 @@ case object Dict extends Encoder {
             new FileOutputStream(s"${Config.home}/${col.tblName}/${col.name}.dictval", false),
             Config.readBufferSize)
 
-        val offsetLookup = mutable.HashMap[A, Int]()
+        val offsetLookup = mutable.HashMap[col.A, Int]()
         var bytesWritten: Int = 0
 
         def load(data: Vector[String]) = {

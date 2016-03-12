@@ -39,7 +39,6 @@ abstract class Column {
 }
 
 case class FixedCharColumn(name: String, tblName: String, size: Int, enc: Encoder) extends Column with CharColumn {
-
     type A = String
     val ord = implicitly[Ordering[A]]
 
