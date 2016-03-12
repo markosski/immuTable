@@ -22,11 +22,13 @@ object FetchSelect {
         val result = ByteBuffer.allocateDirect(oidBuffer.limit)
 
         // Special case for Dict encoding where we need to string value has to be converted to Int.
+        info("Start exactVal")
         val exactVal = pred.col.enc match {
             case Dict => {
                 val lookup = Dict.lookup(pred.col)
                 pred.value.map(x => lookup.get(pred.col.stringToValue(x)).get)
             }
+            case _ => pred.value.map(x => pred.col.stringToValue(x))
         }
 
         debug(s"Start FetchSelect scan ${pred.col.name} ${pred.value}")
