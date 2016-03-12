@@ -17,13 +17,15 @@ trait Loader {
     def finish: Unit
 }
 
-trait SeekableIterator {
+trait SeekableIterator[A] extends Iterator[A] {
     def seek(pos: Int): Unit
+    def next: A
+    def hasNext: Boolean
 }
 
 trait Encoder {
     def loader(col: Column): Loader
-    def iterator(col: Column): Iterator[(Int, _)]
+    def iterator(col: Column): SeekableIterator[(Int, _)]
 }
 
 

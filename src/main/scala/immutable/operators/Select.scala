@@ -24,7 +24,7 @@ object Select {
         info(s"Start Select scan ${pred.col.name} ${pred.min}/${pred.max}")
         while(iter.hasNext) {
             val tuple = iter.next
-            if (pred.col.ord.gteq(tuple._2.asInstanceOf[pred.col.A], minVal) && pred.col.ord.lteq(tuple._2.asInstanceOf[pred.col.A], maxVal)) {
+            if (pred.col.ord.gteq(tuple._2.asInstanceOf[pred.col.DataType], minVal) && pred.col.ord.lteq(tuple._2.asInstanceOf[pred.col.DataType], maxVal)) {
                 result.putInt(tuple._1)
             }
         }

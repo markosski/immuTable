@@ -23,7 +23,7 @@ case object Dense extends Encoder {
     }
 
     // TODO: Somehow pass table size information
-    def iterator(col: Column): Iterator[(Int, _)] = col match {
+    def iterator(col: Column): SeekableIterator[(Int, _)] = col match {
         case col: NumericColumn => new FixedCharNumericIterator(col, 1000000)
         case col: FixedCharColumn => new FixedCharNumericIterator(col, 1000000)
         case col: VarCharColumn => new VarCharIterator(col, 1000000)
@@ -70,7 +70,7 @@ case object Dense extends Encoder {
         }
     }
 
-    class FixedCharNumericIterator(col: Column, size: Int, seek: Int=0) extends Iterator[(Int, _)] with SeekableIterator {
+    class FixedCharNumericIterator(col: Column, size: Int, seek: Int=0) extends SeekableIterator[(Int, _)] {
         val file = BufferManager.get(col.name)
         seek(seek)
 
@@ -92,7 +92,7 @@ case object Dense extends Encoder {
         }
     }
 
-    class VarCharIterator(col: Column, size: Int, seek: Int=0) extends Iterator[(Int, _)] with SeekableIterator {
+    class VarCharIterator(col: Column, size: Int, seek: Int=0) extends SeekableIterator[(Int, _)] {
         val varFile = BufferManager.get(col.name)
 
         var counter = 0

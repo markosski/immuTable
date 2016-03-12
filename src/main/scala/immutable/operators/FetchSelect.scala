@@ -70,7 +70,6 @@ object FetchSelect {
 
     def apply(pred: Range, oidBuffer: ByteBuffer, useIntermediate: Boolean)(implicit table: Table): ByteBuffer = {
         debug("Enter FetchSelect")
-        type A = pred.col.A
         Operator.prepareBuffer(pred.col, table)
 
         val iter = pred.col.getIterator
@@ -88,7 +87,7 @@ object FetchSelect {
 
             while (tuple._1 < oid && iter.hasNext) tuple = iter.next
 
-            if (pred.col.ord.gteq(tuple._2.asInstanceOf[A], minVal) && pred.col.ord.lteq(tuple._2.asInstanceOf[A], maxVal)) result.putInt(tuple._1)
+            if (pred.col.ord.gteq(tuple._2.asInstanceOf[pred.col.DataType], minVal) && pred.col.ord.lteq(tuple._2.asInstanceOf[pred.col.DataType], maxVal)) result.putInt(tuple._1)
         }
         info("End FetchSelect scan")
         oidBuffer.rewind

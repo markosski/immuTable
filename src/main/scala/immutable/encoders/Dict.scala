@@ -42,7 +42,7 @@ case object Dict extends Encoder {
         lookup
     }
 
-    class DictIterator(col: Column, seek: Int=0) extends Iterator[(Int, Int)] with SeekableIterator {
+    class DictIterator(col: Column, seek: Int=0) extends SeekableIterator[(Int, _)] {
         val bofFile = BufferManager.get(col.name)
         seek(seek)
 
