@@ -3,18 +3,16 @@ package immutable
 import immutable.helpers.Conversions
 import immutable.encoders.{Loader, Encoder}
 import immutable.LoggerHelper._
-import scala.reflect.runtime.universe._
-import scala.Symbol
 
 /**
  * http://ktoso.github.io/scala-types-of-types/
  */
 
 trait NumericColumn {
-    type A
-    val min: A
-    val max: A
-    val nullVal: A
+    type DataType
+    val min: DataType
+    val max: DataType
+    val nullVal: DataType
 }
 
 trait CharColumn {
@@ -22,25 +20,25 @@ trait CharColumn {
 }
 
 abstract class Column {
-    type A
-    implicit val ord: Ordering[A]
+    type DataType
+    implicit val ord: Ordering[DataType]
 
     val name: String
     val tblName: String
     val size: Int
     val enc: Encoder
     val nullRepr = "NULL"
-    def stringToValue(s: String): A
+    def stringToValue(s: String): DataType
     def stringToBytes(s: String): Array[Byte]
-    def bytesToValue(bytes: Array[Byte]): A
+    def bytesToValue(bytes: Array[Byte]): DataType
     def validate(s: String): Unit
     def getIterator = enc.iterator(this)
     def getLoader = enc.loader(this)
 }
 
 case class FixedCharColumn(name: String, tblName: String, size: Int, enc: Encoder) extends Column with CharColumn {
-    type A = String
-    val ord = implicitly[Ordering[A]]
+    type DataType = String
+    val ord = implicitly[Ordering[DataType]]
 
     def stringToValue(s: String): String = s.slice(0, size)
 
@@ -57,8 +55,8 @@ case class FixedCharColumn(name: String, tblName: String, size: Int, enc: Encode
 
 case class VarCharColumn(name: String, tblName: String, size: Int, enc: Encoder)
         extends Column with CharColumn {
-    type A = String
-    val ord = implicitly[Ordering[A]]
+    type DataType = String
+    val ord = implicitly[Ordering[DataType]]
 
     def stringToValue(s: String): String = s.slice(0, size)
 
@@ -76,8 +74,9 @@ case class VarCharColumn(name: String, tblName: String, size: Int, enc: Encoder)
 
 case class TinyIntColumn(name: String, tblName: String, enc: Encoder)
         extends Column with NumericColumn {
-    type A = Byte
-    val ord = implicitly[Ordering[A]]
+    type DataType = Byte
+    val ord = implicitly[Ordering[DataType]]
+
 
     val nullVal = Byte.MinValue
     val min = (Byte.MinValue + 1).toByte
@@ -98,8 +97,8 @@ case class TinyIntColumn(name: String, tblName: String, enc: Encoder)
 
 case class ShortIntColumn(name: String, tblName: String, enc: Encoder)
         extends Column with NumericColumn {
-    type A = Short
-    val ord = implicitly[Ordering[A]]
+    type DataType = Short
+    val ord = implicitly[Ordering[DataType]]
 
     val nullVal = Short.MinValue
     val min = (Short.MinValue + 1).toShort
@@ -122,8 +121,8 @@ case class ShortIntColumn(name: String, tblName: String, enc: Encoder)
 
 case class IntColumn(name: String, tblName: String, enc: Encoder)
         extends Column with NumericColumn {
-    type A = Int
-    val ord = implicitly[Ordering[A]]
+    type DataType = Int
+    val ord = implicitly[Ordering[DataType]]
 
     val nullVal = Int.MinValue
     val min = Int.MinValue + 1
@@ -149,8 +148,8 @@ case class DecimalColumn(name: String, tblName: String, enc: Encoder)
     /**
      * http://stackoverflow.com/questions/9810010/scala-library-to-convert-numbers-int-long-double-to-from-arraybyte
      */
-    type A = Double
-    val ord = implicitly[Ordering[A]]
+    type DataType = Double
+    val ord = implicitly[Ordering[DataType]]
 
     val nullVal = Int.MinValue.toDouble
     val min = Int.MinValue.toDouble + 1

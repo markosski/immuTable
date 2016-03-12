@@ -15,13 +15,13 @@ case object Dict extends Encoder {
     def iterator(col: Column) = new DictIterator(col)
     def loader(col: Column) = new DictLoader(col)
 
-    def lookup(col: Column): mutable.HashMap[col.A, Int] = {
+    def lookup(col: Column): mutable.HashMap[col.DataType, Int] = {
         // TODO: Lookups should be cached in some global
         val dictValFile = new BufferedInputStream(
             new FileInputStream(s"${Config.home}/${col.tblName}/${col.name}.dictval"),
             Config.readBufferSize)
 
-        val lookup = mutable.HashMap[col.A, Int]()
+        val lookup = mutable.HashMap[col.DataType, Int]()
 
         val itemSize = Array[Byte](1)
         dictValFile.read(itemSize)  // gets byte containing value size
@@ -78,7 +78,7 @@ case object Dict extends Encoder {
             new FileOutputStream(s"${Config.home}/${col.tblName}/${col.name}.dictval", false),
             Config.readBufferSize)
 
-        val offsetLookup = mutable.HashMap[col.A, Int]()
+        val offsetLookup = mutable.HashMap[col.DataType, Int]()
         var bytesWritten: Int = 0
 
         def load(data: Vector[String]) = {

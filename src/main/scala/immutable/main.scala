@@ -20,7 +20,7 @@ object Main extends App {
 
         info("start --")
 
-        val res = Select(Exact(table.getColumn[VarCharColumn]("fname"), List("Jennie", "Melissa", "Bristol", "Cephus")), false)
+        val res = Select(Exact(table.getColumn[VarCharColumn]("fname"), List("Jennie")), false)
         val res1 = FetchSelect(Exact(table.getColumn[FixedCharColumn]("state"), List("CT", "NY", "NJ")), res, false)
         val res2 = FetchSelect(Range(table.getColumn[TinyIntColumn]("score2"), "18", "100"), res1, false)
         val res3 = FetchSelect(Range(table.getColumn[TinyIntColumn]("score3"), "75", "100"), res2, false)
