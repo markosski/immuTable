@@ -42,6 +42,7 @@ object Select {
         val result = ByteBuffer.allocateDirect(table.size * 4)
 
         // Special case for Dict encoding where we need to string value has to be converted to Int.
+        info("Start exactVal")
         val exactVal = pred.col.enc match {
             case Dict => {
                 val lookup = Dict.lookup(pred.col)
@@ -54,10 +55,10 @@ object Select {
 
         // Branching out depending if we're testing one value or more.
         // Would like to find out if compile figure it out and .contains() should be used instead.
-        if (pred.value.size == 1) {
+        if (exactVal.size == 1) {
             while(iter.hasNext) {
                 val tuple = iter.next
-                if (exactVal == tuple._2) result.putInt(tuple._1)
+                if (exactVal(0) == tuple._2) result.putInt(tuple._1)
             }
         } else {
             while(iter.hasNext) {

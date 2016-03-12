@@ -15,17 +15,17 @@ object Operator {
     // TODO: This functionality should be somewhere in Encoder.
     def prepareBuffer(col: Column, table: Table): Unit = {
         val ext = col match {
-            case x: VarCharColumn => {
-                if (x.enc == Dense) "densevar"
-                else if (x.enc == Dict) "dict"
+            case x: VarCharColumn => x.enc match {
+                case Dense => "densevar"
+                case Dict => "dict"
             }
-            case x: FixedCharColumn => {
-                if (x.enc == Dense) "dense"
-                else if (x.enc == Dict) "dict"
+            case x: FixedCharColumn => x.enc match {
+                case Dense => "dense"
+                case Dict => "dict"
             }
-            case x: NumericColumn => {
-                if (x.enc == Dense) "dense"
-                else if (x.enc == Dict) "dict"
+            case x: NumericColumn => x.enc match {
+                case Dense => "dense"
+                case Dict => "dict"
             }
         }
 
