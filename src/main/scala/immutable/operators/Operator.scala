@@ -8,9 +8,11 @@ import scala.util.{Try, Failure, Success}
 
 /**
   * Created by marcin on 2/26/16.
+  *
   */
 object Operator {
-    def prepareBuffer[A](col: Column[A], table: Table): Unit = {
+    // TODO: This functionality should be somewhere in Encoder.
+    def prepareBuffer(col: Column[_], table: Table): Unit = {
         val ext = col match {
             case x: VarCharColumn => {
                 if (x.encoder == 'Dense) "densevar"
@@ -21,7 +23,7 @@ object Operator {
                 else if (x.encoder == 'RunLength) "rle"
                 else if (x.encoder == 'Dict) "dict"
             }
-            case x: NumericColumn[_] => {
+            case x: NumericColumn => {
                 if (x.encoder == 'Dense) "dense"
                 else if (x.encoder == 'DensePage) "densep"
                 else if (x.encoder == 'RunLength) "rle"

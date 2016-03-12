@@ -2,8 +2,8 @@ package immutable
 
 import java.nio.ByteBuffer
 import immutable.encoders.Intermediate
-import immutable.helpers.Timer
-import immutable.operators.{Union, FetchSelect, Select, Intersect}
+import immutable.helpers.{Conversions, Timer}
+import immutable.operators._
 import immutable.LoggerHelper._
 import immutable._
 import java.util.Date
@@ -21,12 +21,12 @@ object Main extends App {
 
         info("start --")
 
-//        val res = Select(Func(table.getColumn[TinyIntColumn]("age"), (x: Byte) => { if (x == "55".toByte) true else false }), false)
-        val res = Select(Range(table.getColumn[TinyIntColumn]("age"), "18", "75"), false)
-//        val res1 = FetchSelect(Exact(table.getColumn[VarCharColumn]("fname"), List("Bristol", "Melissa")), res, false)
-//        val res2 = FetchSelect(Exact(table.getColumn[FixedCharColumn]("state"), List("CT", "NY", "NJ")), res, false)
-//        val res3 = FetchSelect(Range(table.getColumn[TinyIntColumn]("score2"), "75", "100"), res2, false)
-//        val res4 = FetchSelect(Range(table.getColumn[TinyIntColumn]("score3"), "75", "100"), res3, false)
+//        val res = Select(Filter(table.getColumn[TinyIntColumn]("age"), (x: Byte) => { if (x == "55".toByte) true else false }), false)
+        val res = Select(Exact(table.getColumn[VarCharColumn]("fname"), List("Jennie", "Melissa", "Bristol", "Cephus")), false)
+//        val res1 = Select(Exact(table.getColumn[FixedCharColumn]("state"), List("CT", "NY", "NJ")), false)
+//        val res2 = FetchSelect(Range(table.getColumn[TinyIntColumn]("score2"), "18", "100"), res1, false)
+//        val res3 = FetchSelect(Range(table.getColumn[TinyIntColumn]("score3"), "75", "100"), res2, false)
+        val res4 = FetchSelect(Range(table.getColumn[TinyIntColumn]("age"), "18", "70"), res, false)
 
 //        val inter = Select(table.getColumn[FixedCharColumn]("state"), List("CT", "NY", "NJ"))
 //        val res2 = Union(res, res1)
@@ -35,8 +35,22 @@ object Main extends App {
 //        Intermediate(table.getColumn[TinyIntColumn]("age"), table).encode(res)
 //        Intermediate(table.getColumn[FixedCharColumn]("state"), table).encode(inter)
 
+        info("result: " + res4.limit/4)
+        val result = Project(List(
+            table.getColumn[VarCharColumn]("fname"),
+            table.getColumn[FixedCharColumn]("state"),
+            table.getColumn[FixedCharColumn]("zip"),
+            table.getColumn[TinyIntColumn]("score1")
+        ), res4).iterator
+//        for (i <- 0 until math.min(res4.limit/4, 10)) {
+//            println(res2.getInt)
+//        }
+
+        for (i <- 0 until 10) {
+            println(result.next)
+        }
         info("end --")
-        info("result: " + res.limit/4)
+
     }
 
     def big = {

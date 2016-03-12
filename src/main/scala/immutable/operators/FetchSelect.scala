@@ -24,6 +24,7 @@ object FetchSelect {
         }
         val result = ByteBuffer.allocateDirect(oidBuffer.limit)
 
+        // Special case for Dict encoding where we need to string value has to be converted to Int.
         val exactVal = {
             if (pred.col.encoder == 'Dict) {
                 val lookup = Dict(pred.col, table).lookup
@@ -33,17 +34,33 @@ object FetchSelect {
             }
         }
 
-        var tuple = iter.next
-
         debug(s"Start FetchSelect scan ${pred.col.name} ${pred.value}")
-        while (oidBuffer.position < oidBuffer.limit) {
-            var oid = oidBuffer.getInt
 
-            while (tuple._1 > oid && oidBuffer.position < oidBuffer.limit) oid = oidBuffer.getInt
+        var tuple = iter.next
+        if (pred.col.encoder == 'Dict) {
+            while (oidBuffer.position < oidBuffer.limit) {
+                var oid = oidBuffer.getInt
 
-            while (iter.hasNext && tuple._1 < oid) tuple = iter.next
+                while (tuple._1 > oid && oidBuffer.position < oidBuffer.limit) oid = oidBuffer.getInt
 
-            if (tuple._1 == oid && exactVal.contains(tuple._2)) result.putInt(tuple._1)
+                while (iter.hasNext && tuple._1 < oid) tuple = iter.next
+
+                if (tuple._1 == oid && exactVal.contains(tuple._2)) {
+                    result.putInt(tuple._1)
+                }
+            }
+        } else {
+            while (oidBuffer.position < oidBuffer.limit) {
+                var oid = oidBuffer.getInt
+
+                while (tuple._1 > oid && oidBuffer.position < oidBuffer.limit) oid = oidBuffer.getInt
+
+                while (iter.hasNext && tuple._1 < oid) tuple = iter.next
+
+                if (tuple._1 == oid && exactVal.contains(tuple._2.asInstanceOf[A])) {
+                    result.putInt(tuple._1)
+                }
+            }
         }
         info("End FetchSelect scan")
         oidBuffer.rewind
@@ -76,7 +93,7 @@ object FetchSelect {
 
             while (tuple._1 < oid && iter.hasNext) tuple = iter.next
 
-            if (numeric.gteq(tuple._2, minVal) && numeric.lteq(tuple._2, maxVal)) result.putInt(tuple._1)
+            if (numeric.gteq(tuple._2.asInstanceOf[A], minVal) && numeric.lteq(tuple._2.asInstanceOf[A], maxVal)) result.putInt(tuple._1)
         }
         info("End FetchSelect scan")
         oidBuffer.rewind

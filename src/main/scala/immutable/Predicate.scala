@@ -10,7 +10,7 @@ sealed trait Predicate[A] {
   * @param min
   * @param max
   */
-case class Range[A](col: Column[A] with NumericColumn[A], min: String, max: String) extends Predicate[A] {
+case class Range[A](col: Column[A] with NumericColumn, min: String, max: String) extends Predicate[A] {
     override def toString: String = s"range__${col.name},${min},${max}"
 }
 
@@ -39,6 +39,6 @@ case class Contains[A](col: Column[A] with CharColumn, value: String, mode: Int 
   * @param func
   * @tparam A
   */
-case class Func[A](col: Column[A], func: (A) => Boolean) extends Predicate[A] {
+case class Filter[A](col: Column[A], func: (A) => Boolean) extends Predicate[A] {
     override def toString: String = s"func__${func}"
 }

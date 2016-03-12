@@ -14,9 +14,9 @@ import immutable._
   */
 
 case class Intermediate[A](col: Column[A], table: Table) extends Encoder(col, table) with Iterable[(Int, A)] {
-    def iterator = new IntermediateIterator[A](col)
+    def iterator = new IntermediateIterator()
 
-    class IntermediateIterator[A](col: Column[A], seek: Int=0) extends Iterator[(Int, A)] {
+    class IntermediateIterator(seek: Int=0) extends Iterator[(Int, A)] {
         val file = BufferManager.get(s"${col.name}_0")
         seek(seek)
         var counter = 0
@@ -40,8 +40,7 @@ case class Intermediate[A](col: Column[A], table: Table) extends Encoder(col, ta
         }
 
         def hasNext = {
-            if (counter < file.limit / (4 + colSize)) true
-            else false
+            if (counter < file.limit / (4 + colSize)) true else false
         }
 
         def seek(loc: Int) = {
@@ -56,7 +55,7 @@ case class Intermediate[A](col: Column[A], table: Table) extends Encoder(col, ta
             Config.readBufferSize)
 
         val iter = Encoder.getColumnIterator(col, table)
-        var tuple: (Int, A) = iter.next
+        var tuple = iter.next
 
         while(buffer.position < buffer.limit) {
             val oid = buffer.getInt

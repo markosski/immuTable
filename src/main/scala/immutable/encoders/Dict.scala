@@ -10,16 +10,17 @@ import scala.collection.mutable
 /**
   * Created by marcin on 2/29/16.
   */
+
 case class Dict[A](col: Column[A], table: Table)
-        extends Encoder(col, table) with Loadable with Iterable[(Int, A)] {
+        extends Encoder(col, table) with Loadable with Iterable[(Int, _)] {
 
     col match {
         case x: CharColumn => Unit
         case _ => throw new Exception("Dict encoder can only accept char data type.")
     }
 
-    def iterator = new DictIterator(col)
-    def loader = new DictLoader(col, table)
+    def iterator = new DictIterator()
+    def loader = new DictLoader()
 
     def lookup: mutable.HashMap[A, Int] = {
         // TODO: Lookups should be cached in some global
@@ -32,33 +33,38 @@ case class Dict[A](col: Column[A], table: Table)
         val itemSize = Array[Byte](1)
         dictValFile.read(itemSize)  // gets byte containing value size
         var bytes = new Array[Byte](itemSize(0))
+        var bytesRead: Int = 0
 
         var i = 0
         while (dictValFile.read(bytes) > 0) {
-            lookup += (col.bytesToValue(bytes) -> i)
+            lookup += (col.bytesToValue(bytes) -> bytesRead)
             i += 1
 
             dictValFile.read(itemSize)  // gets byte containing value size
+
+            bytesRead += bytes.length + 1 // Mark byte position of current item (+1 null byte)
+
             bytes = new Array[Byte](itemSize(0))
         }
         lookup
     }
 
-    class DictIterator(col: Column[A], seek: Int=0) extends Iterator[(Int, A)] {
+    class DictIterator(seek: Int=0) extends Iterator[(Int, _)] with SeekableIterator {
         val bofFile = BufferManager.get(col.name)
         seek(seek)
 
         var bytes = new Array[Byte](4)
         var counter = 0
+
         def next = {
             bofFile.get(bytes)
             counter += 1
-            (counter - 1, Conversions.bytesToInt(bytes).asInstanceOf[A])
+            // TODO: This should somehow return tuple of (Int, Int)
+            (counter - 1, Conversions.bytesToInt(bytes))
         }
 
         def hasNext = {
-            if (counter < table.size) true
-            else false
+            if (counter < table.size) true else false
         }
 
         def seek(loc: Int) = {
@@ -67,7 +73,7 @@ case class Dict[A](col: Column[A], table: Table)
         }
     }
 
-    class DictLoader(col: Column[A], table: Table) extends Loader {
+    class DictLoader() extends Loader {
         val bofFile = new BufferedOutputStream(
             new FileOutputStream(s"${Config.home}/${table.name}/${col.name}.dict", false),
             Config.readBufferSize)

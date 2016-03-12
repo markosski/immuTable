@@ -16,10 +16,10 @@ import scala.io.Source
 case class RunLength[A](col: Column[A], table: Table) extends Encoder(col, table) with Iterable[(Int, A)] {
     private val repeatValueSize = 2
 
-    def iterator = new FixedRunLengthIterator(col)
-    def loader = new RunLengthLoader(col, table)
+    def iterator = new FixedRunLengthIterator()
+    def loader = new RunLengthLoader()
 
-    class FixedRunLengthIterator[A](col: Column[A], seek: Int=0) extends Iterator[(Int, A)] {
+    class FixedRunLengthIterator(seek: Int=0) extends Iterator[(Int, A)] {
         val rlnFile = BufferManager.get(col.name)
         seek(seek)
 
@@ -41,8 +41,7 @@ case class RunLength[A](col: Column[A], table: Table) extends Encoder(col, table
         }
 
         def hasNext = {
-            if (counter < table.size) true
-            else false
+            if (counter < table.size) true else false
         }
 
         def seek(loc: Int) = {
@@ -51,7 +50,7 @@ case class RunLength[A](col: Column[A], table: Table) extends Encoder(col, table
         }
     }
 
-    class RunLengthLoader(col: Column[A], table: Table) extends Loader {
+    class RunLengthLoader() extends Loader {
         val colFile = new BufferedOutputStream(
             new FileOutputStream(s"${Config.home}/${table.name}/${col.name}.rle", false),
             Config.readBufferSize)

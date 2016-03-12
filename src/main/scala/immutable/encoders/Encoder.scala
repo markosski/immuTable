@@ -25,6 +25,10 @@ trait Loadable {
     def loader: Loader
 }
 
+trait SeekableIterator {
+    def seek(pos: Int): Unit
+}
+
 abstract class Encoder[A](col: Column[A], table: Table) {
 
     def createStats(pos: Int, csv: SourceCSV): ColumnStats[A] = {
@@ -62,20 +66,16 @@ abstract class Encoder[A](col: Column[A], table: Table) {
         csvFile.close()
 
         col match {
-            case x: NumericColumn[A] => NumericColumnStats(rows, values.size, values.min._1, values.max._1)
+            case x: NumericColumn => NumericColumnStats(rows, values.size, values.min._1, values.max._1)
             case x: CharColumn => StringColumnStats(rows, values.size)
         }
     }
 }
 
 object Encoder {
-    def getColumnIterator[A](col: Column[A], table: Table): Iterator[(Int, A)] = {
+    def getColumnIterator[A](col: Column[A], table: Table): Iterator[(Int, _)] = {
         col.encoder match {
             case 'RunLength => RunLength(col, table).iterator
-            case 'DensePage => col match {
-                case col: Column[A] with NumericColumn[A] => DensePage(col, table).iterator
-                case _ => throw new Exception("Blah")
-            }
             case 'Dense => Dense(col, table).iterator
             case 'Dict => Dict(col, table).iterator
             case 'Intermediate => Intermediate(col, table).iterator

@@ -3,7 +3,7 @@ package immutable.operators
 import java.nio.ByteBuffer
 
 import immutable._
-import immutable.encoders.{Encoder, Intermediate}
+import immutable.encoders.{Dict, Encoder, Intermediate}
 import immutable.LoggerHelper._
 
 /**
@@ -11,7 +11,8 @@ import immutable.LoggerHelper._
   */
 
 object Select {
-    def apply[A](pred: Range[A], useIntermediate: Boolean)(implicit table: Table, numeric: Numeric[A]): ByteBuffer = {
+    def apply[A](pred: Range[A], useIntermediate: Boolean)(implicit table: Table, num: Numeric[A]): ByteBuffer = {
+
         info("Enter Select")
         Operator.prepareBuffer(pred.col, table)
 
@@ -28,7 +29,7 @@ object Select {
         info(s"Start Select scan ${pred.col.name} ${pred.min}/${pred.max}")
         while(iter.hasNext) {
             val tuple = iter.next
-            if (numeric.gteq(tuple._2, minVal) && numeric.lteq(tuple._2, maxVal)) {
+            if (num.gteq(tuple._2.asInstanceOf[A], minVal) && num.lteq(tuple._2.asInstanceOf[A], maxVal)) {
                 result.putInt(tuple._1)
             }
         }
@@ -49,15 +50,30 @@ object Select {
 
         val result = ByteBuffer.allocateDirect(table.size * 4)
 
-        val exactVal = pred.col match {
-            case col: VarCharColumn => pred.value.map(x => x.toInt)
-            case _ => pred.value.map(x => pred.col.stringToValue(x))
+        // Special case for Dict encoding where we need to string value has to be converted to Int.
+        val exactVal = {
+            if (pred.col.encoder == 'Dict) {
+                val lookup = Dict(pred.col, table).lookup
+                pred.value.map(x => lookup.get(pred.col.stringToValue(x)).get)
+            } else {
+                pred.value.map(x => pred.col.stringToValue(x))
+            }
         }
 
         info(s"Start Select scan ${pred.col.name} ${pred.value}")
-        while(iter.hasNext) {
-            val tuple = iter.next
-            if (exactVal == tuple._2) result.putInt(tuple._1)
+
+        // Branching out depending if we're testing one value or more.
+        // Would like to find out if compile figure it out and .contains() should be used instead.
+        if (pred.value.size == 1) {
+            while(iter.hasNext) {
+                val tuple = iter.next
+                if (exactVal == tuple._2) result.putInt(tuple._1)
+            }
+        } else {
+            while(iter.hasNext) {
+                val tuple = iter.next
+                if (exactVal.contains(tuple._2)) result.putInt(tuple._1)
+            }
         }
         info(s"End Select scan")
         result.flip
@@ -86,7 +102,7 @@ object Select {
         result
     }
 
-    def apply[A](pred: Func[A], useIntermediate: Boolean)(implicit table: Table): ByteBuffer = {
+    def apply[A](pred: Filter[A], useIntermediate: Boolean)(implicit table: Table): ByteBuffer = {
         info("Enter Select")
         Operator.prepareBuffer(pred.col, table)
 
@@ -101,7 +117,7 @@ object Select {
         info(s"Start Select scan ${pred.col.name} ${pred.func}")
         while(iter.hasNext) {
             val tuple = iter.next
-            if (pred.func(tuple._2)) result.putInt(tuple._1)
+            if (pred.func(tuple._2.asInstanceOf[A])) result.putInt(tuple._1)
         }
         info(s"End Select scan")
         result.flip

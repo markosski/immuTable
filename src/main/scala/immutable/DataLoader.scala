@@ -56,7 +56,6 @@ object DataLoaderNew {
         var i = 0
         for (col <- table.columns) {
             loaders(i) = col.encoder match {
-                case 'DensePage => DensePage(col.asInstanceOf[TinyIntColumn], table).loader
                 case 'Dict => Dict(col, table).loader
                 case 'RunLength => RunLength(col, table).loader
                 case 'Dense => Dense(col, table).loader
