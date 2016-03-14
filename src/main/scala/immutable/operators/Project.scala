@@ -4,12 +4,12 @@ import java.nio.ByteBuffer
 
 import immutable.LoggerHelper._
 import immutable._
-import immutable.encoders.{Dict, Dense, Encoder, SeekableIterator}
+import immutable.encoders.{Dict, Dense, Encoder}
 
 /**
   * Created by marcin on 3/7/16.
   */
-case class Project(cols: List[Column], oids: ByteBuffer)(implicit table: Table) extends Iterable[Seq[_]] {
+case class Project(cols: List[Column], oids: ByteBuffer, limit: Option[Int] = None) extends Iterable[Seq[_]] {
     debug("Enter Project")
     val iterator = new ProjectIterator()
 
@@ -18,6 +18,7 @@ case class Project(cols: List[Column], oids: ByteBuffer)(implicit table: Table) 
         var oid: Int = 0
         var bufferSize = oids.limit/4
         val iterators = cols.map(x => {
+            val table = SchemaManager.getTable(x.tblName)
             Operator.prepareBuffer(x, table)
             x.getIterator
         })

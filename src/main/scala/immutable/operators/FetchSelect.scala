@@ -2,9 +2,8 @@ package immutable.operators
 
 import java.nio.ByteBuffer
 
-import immutable.{Range, Exact, Table}
+import immutable._
 import immutable.encoders.{Dict, Encoder}
-import immutable.{VarCharColumn, NumericColumn, Column}
 import immutable.LoggerHelper._
 
 /**
@@ -15,6 +14,8 @@ object FetchSelect {
     def apply(pred: Exact, oidBuffer: ByteBuffer, useIntermediate: Boolean)
                 (implicit table: Table): ByteBuffer = {
         debug("Enter FetchSelect")
+        val table = SchemaManager.getTable(pred.col.tblName)
+
         Operator.prepareBuffer(pred.col, table)
 
         val iter = pred.col.getIterator
@@ -70,6 +71,8 @@ object FetchSelect {
 
     def apply(pred: Range, oidBuffer: ByteBuffer, useIntermediate: Boolean)(implicit table: Table): ByteBuffer = {
         debug("Enter FetchSelect")
+        val table = SchemaManager.getTable(pred.col.tblName)
+
         Operator.prepareBuffer(pred.col, table)
 
         val iter = pred.col.getIterator

@@ -11,8 +11,10 @@ import immutable.LoggerHelper._
   */
 
 object Select {
-    def apply(pred: Range, useIntermediate: Boolean)(implicit table: Table): ByteBuffer = {
+    def apply(pred: Range, useIntermediate: Boolean): ByteBuffer = {
         info("Enter Select")
+
+        val table = SchemaManager.getTable(pred.col.tblName)
         Operator.prepareBuffer(pred.col, table)
 
         // TODO: Make it so we're not loading iterator twice
@@ -35,6 +37,8 @@ object Select {
 
     def apply(pred: Exact, useIntermediate: Boolean)(implicit table: Table): ByteBuffer = {
         info("Enter Select")
+
+        val table = SchemaManager.getTable(pred.col.tblName)
         Operator.prepareBuffer(pred.col, table)
 
         val iter = pred.col.getIterator
@@ -62,7 +66,10 @@ object Select {
         } else {
             while(iter.hasNext) {
                 val tuple = iter.next
-                if (exactVal.contains(tuple._2)) result.putInt(tuple._1)
+                if (exactVal.contains(tuple._2)) {
+                    if (result.position % 100000 == 0) info(s"${result.position}")
+                    result.putInt(tuple._1)
+                }
             }
         }
         info(s"End Select scan")
@@ -72,6 +79,8 @@ object Select {
 
     def apply(pred: Contains, useIntermediate: Boolean)(implicit table: Table): ByteBuffer = {
         info("Enter Select")
+        val table = SchemaManager.getTable(pred.col.tblName)
+
         Operator.prepareBuffer(pred.col, table)
 
         var iter = pred.col.getIterator

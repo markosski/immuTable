@@ -43,6 +43,8 @@ case object Dict extends Encoder {
     }
 
     class DictIterator(col: Column, seek: Int=0) extends SeekableIterator[(Int, _)] {
+        val table = SchemaManager.getTable(col.tblName)
+
         val bofFile = BufferManager.get(col.name)
         seek(seek)
 
@@ -52,15 +54,11 @@ case object Dict extends Encoder {
         def next = {
             bofFile.get(bytes)
             counter += 1
-            // TODO: This should somehow return tuple of (Int, Int)
             (counter - 1, Conversions.bytesToInt(bytes))
         }
 
-        // TODO: We need to get access to table object, for now faking it.
-        val table = 1000000
-
         def hasNext = {
-            if (counter < table) true else false
+            if (counter < table.size) true else false
         }
 
         def seek(loc: Int) = {

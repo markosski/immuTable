@@ -1,7 +1,6 @@
 package immutable
 
-import immutable.helpers.Conversions
-import immutable.encoders.{Loader, Encoder}
+import immutable.encoders.{Encoder}
 import immutable.LoggerHelper._
 
 /**
@@ -19,7 +18,7 @@ trait CharColumn {
     val nullVal: Byte = 0
 }
 
-abstract class Column {
+trait Column {
     type DataType
     implicit val ord: Ordering[DataType]
 

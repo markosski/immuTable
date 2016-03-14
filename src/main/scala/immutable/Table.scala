@@ -55,6 +55,8 @@ object Table {
 
                 val newColumn = col.get("type").asString match {
                     case "TinyIntType" => TinyIntColumn(name, tblName, Dense)
+                    case "ShortIntType" => ShortIntColumn(name, tblName, Dense)
+                    case "IntType" => IntColumn(name, tblName, Dense)
                     case "FixedCharType" => encoder match {
                         case 'Dense => FixedCharColumn(name, tblName, size, Dense)
                         case 'Dict => FixedCharColumn(name, tblName, size, Dict)
@@ -70,34 +72,6 @@ object Table {
                 continueWhile = false
             }
         }
-
-//        while (continueWhile) {
-//            if (parsedCols.get(counter).isInstanceOf[JObject]) {
-//                val col = parsedCols.get(counter)
-//                val name: String = col.get("name").asString
-//                val size: Int = col.get("size").getBigInt match {
-//                    case Some(x) => x.toInt
-//                    case None => 0
-//                }
-//                val encoder: Symbol = col.get("encoder").getString match {
-//                    case Some(x) => Symbol(x)
-//                    case None => 'Dense
-//                }
-//
-//                val newColumn = col.get("type").asString match {
-//                    case "TinyIntType" => TinyIntColumn(name, encoder)
-//                    case "ShortIntType" => ShortIntColumn(name, encoder)
-//                    case "IntType" => IntColumn(name, encoder)
-//                    case "FixedCharType" => FixedCharColumn(name, size, encoder)
-//                    case "VarCharType" => VarCharColumn(name, size, encoder)
-//                    case _ => throw new Exception("Column definition not recognized.")
-//                }
-//                columns += newColumn
-//                counter += 1
-//            } else {
-//                continueWhile = false
-//            }
-//        }
 
         Table(tblName, columns: _*)
     }

@@ -24,9 +24,9 @@ case object Dense extends Encoder {
 
     // TODO: Somehow pass table size information
     def iterator(col: Column): SeekableIterator[(Int, _)] = col match {
-        case col: NumericColumn => new FixedCharNumericIterator(col, 1000000)
-        case col: FixedCharColumn => new FixedCharNumericIterator(col, 1000000)
-        case col: VarCharColumn => new VarCharIterator(col, 1000000)
+        case col: NumericColumn => new FixedCharNumericIterator(col)
+        case col: FixedCharColumn => new FixedCharNumericIterator(col)
+        case col: VarCharColumn => new VarCharIterator(col)
         case _ => throw new Exception("Unsupported column type for this iterator.")
     }
 
@@ -70,7 +70,9 @@ case object Dense extends Encoder {
         }
     }
 
-    class FixedCharNumericIterator(col: Column, size: Int, seek: Int=0) extends SeekableIterator[(Int, _)] {
+    class FixedCharNumericIterator(col: Column, seek: Int=0) extends SeekableIterator[(Int, _)] {
+        val table = SchemaManager.getTable(col.tblName)
+
         val file = BufferManager.get(col.name)
         seek(seek)
 
@@ -83,7 +85,7 @@ case object Dense extends Encoder {
         }
 
         def hasNext = {
-            if (counter < size) true else false
+            if (counter < table.size) true else false
         }
 
         def seek(loc: Int) = {
@@ -92,7 +94,9 @@ case object Dense extends Encoder {
         }
     }
 
-    class VarCharIterator(col: Column, size: Int, seek: Int=0) extends SeekableIterator[(Int, _)] {
+    class VarCharIterator(col: Column, seek: Int=0) extends SeekableIterator[(Int, _)] {
+        val table = SchemaManager.getTable(col.tblName)
+
         val varFile = BufferManager.get(col.name)
 
         var counter = 0
@@ -107,7 +111,7 @@ case object Dense extends Encoder {
         }
 
         def hasNext = {
-            if (counter < size) true else false
+            if (counter < table.size) true else false
         }
 
         def seek(loc: Int) = {
