@@ -1,101 +1,132 @@
 package immutable.operators
 
-import java.nio.ByteBuffer
+import java.nio.{IntBuffer, ByteBuffer}
 
 import immutable._
-import immutable.encoders.{Dict, Encoder}
+import immutable.encoders.{Dict}
 import immutable.LoggerHelper._
 
 /**
   * Created by marcin on 2/26/16.
   */
 
-object FetchSelect {
-    def apply(pred: Exact, oidBuffer: ByteBuffer, useIntermediate: Boolean)
-                (implicit table: Table): ByteBuffer = {
-        debug("Enter FetchSelect")
-        val table = SchemaManager.getTable(pred.col.tblName)
+case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperator) extends SelectionOperator {
+    debug(s"Start FetchSelect scan ${col.name} ${items}")
+    val table = SchemaManager.getTable(col.tblName)
+    SelectionOperator.prepareBuffer(col, table)
+    val iterator = new FetchSelectIterator()
 
-        Operator.prepareBuffer(pred.col, table)
+    class FetchSelectIterator extends Iterator[IntBuffer] {
+        val result = IntBuffer.allocate(Config.vectorSize)
+        val encIter = col.getIterator
+        var oids = IntBuffer.allocate(Config.vectorSize)
+        oids.flip
 
-        val iter = pred.col.getIterator
-        val result = ByteBuffer.allocateDirect(oidBuffer.limit)
-
-        // Special case for Dict encoding where we need to string value has to be converted to Int.
-        info("Start exactVal")
-        val exactVal = pred.col.enc match {
+        val exactVal = col.enc match {
             case Dict => {
-                val lookup = Dict.lookup(pred.col)
-                pred.value.map(x => lookup.get(pred.col.stringToValue(x)).get)
+                val lookup = Dict.lookup(col)
+                items.map(x => lookup.get(col.stringToValue(x)).get)
             }
-            case _ => pred.value.map(x => pred.col.stringToValue(x))
+            case _ => items.map(x => col.stringToValue(x))
         }
 
-        debug(s"Start FetchSelect scan ${pred.col.name} ${pred.value}")
+        def next = {
+            result.clear
 
-        var tuple = iter.next
-        pred.col.enc match {
-            case Dict => {
-                while (oidBuffer.position < oidBuffer.limit) {
-                    var oid = oidBuffer.getInt
+            col.enc match {
+                case Dict => {
+                    while (encIter.hasNext && result.hasRemaining) {
+                        if (!oids.hasRemaining && op.iterator.hasNext) oids = op.iterator.next
 
-                    while (tuple._1 > oid && oidBuffer.position < oidBuffer.limit) oid = oidBuffer.getInt
+                        if (oids.hasRemaining) {
+                            var tuple = encIter.next
+                            var oid = oids.get
 
-                    while (iter.hasNext && tuple._1 < oid) tuple = iter.next
+                            while (tuple._1 > oid && oids.hasRemaining) oid = oids.get
 
-                    if (tuple._1 == oid && exactVal.contains(tuple._2)) {
-                        result.putInt(tuple._1)
+                            while (tuple._1 < oid && encIter.hasNext) tuple = encIter.next
+
+                            if (tuple._1 == oid && exactVal.contains(tuple._2)) {
+                                result.put(tuple._1)
+                            }
+                        } else {
+                            result.limit(result.position) // will cause hasRamaining == false
+                        }
                     }
                 }
-            }
-            case _ => {
-                while (oidBuffer.position < oidBuffer.limit) {
-                    var oid = oidBuffer.getInt
-
-                    while (tuple._1 > oid && oidBuffer.position < oidBuffer.limit) oid = oidBuffer.getInt
-
-                    while (iter.hasNext && tuple._1 < oid) tuple = iter.next
-
-                    if (tuple._1 == oid && exactVal.contains(tuple._2)) {
-                        result.putInt(tuple._1)
-                    }
+                case _ => {
+//                    while (encIter.hasNext && result.hasRemaining) {
+//                        if (!oids.hasRemaining && op.iterator.hasNext) oids = op.iterator.next
+//
+//                        if (oids.hasRemaining) {
+//                            var tuple = encIter.next
+//                            var oid = oids.get
+//
+//                            while (tuple._1 > oid && oids.hasRemaining) oid = oids.get
+//
+//                            while (tuple._1 < oid && encIter.hasNext) tuple = encIter.next
+//
+//                            if (tuple._1 == oid && exactVal.contains(tuple._2)) {
+//                                result.put(tuple._1)
+//                            }
+//                        } else {
+//                            result.limit(result.position)
+//                        }
+//                    }
                 }
             }
+            result.flip
+            result
         }
-        info("End FetchSelect scan")
-        oidBuffer.rewind
-        result.flip
-        result
+
+        def hasNext = if (op.iterator.hasNext) true else false
+    }
+}
+
+case class FetchSelectRange(col: Column, min: String, max: String, op: SelectionOperator) extends SelectionOperator {
+    info(s"Start FetchSelect ${col.name} ${min}/${max}")
+    val table = SchemaManager.getTable(col.tblName)
+    SelectionOperator.prepareBuffer(col, table)
+    val iterator = new FetchSelectRangeIterator()
+    val minVal = col.stringToValue(min)
+    val maxVal = col.stringToValue(max)
+
+    class FetchSelectRangeIterator extends Iterator[IntBuffer] {
+        val encIter = col.getIterator
+        val result = IntBuffer.allocate(Config.vectorSize)
+        var oids = IntBuffer.allocate(Config.vectorSize)
+        oids.flip
+
+        def next = {
+            result.clear
+
+            while (encIter.hasNext && result.hasRemaining) {
+                if (!oids.hasRemaining && op.iterator.hasNext) oids = op.iterator.next
+
+                if (oids.hasRemaining) {
+                    var tuple = encIter.next
+                    var oid = oids.get()
+
+                    while (tuple._1 > oid && oids.hasRemaining) oid = oids.get()
+
+                    while (tuple._1 < oid && encIter.hasNext) tuple = encIter.next
+
+                    if (col.ord.gteq(tuple._2.asInstanceOf[col.DataType], minVal)
+                            && col.ord.lteq(tuple._2.asInstanceOf[col.DataType], maxVal)) {
+                        result.put(tuple._1)
+                    }
+                } else {
+                    result.limit(result.position)
+                }
+            }
+
+            result.flip
+            result
+        }
+
+        def hasNext = if (op.iterator.hasNext) true else false
     }
 
 
-    def apply(pred: Range, oidBuffer: ByteBuffer, useIntermediate: Boolean)(implicit table: Table): ByteBuffer = {
-        debug("Enter FetchSelect")
-        val table = SchemaManager.getTable(pred.col.tblName)
-
-        Operator.prepareBuffer(pred.col, table)
-
-        val iter = pred.col.getIterator
-        val result = ByteBuffer.allocateDirect(oidBuffer.limit)
-        val minVal = pred.col.stringToValue(pred.min)
-        val maxVal = pred.col.stringToValue(pred.max)
-
-        var tuple = iter.next
-
-        info(s"Start FetchSelect ${pred.col.name} ${pred.min}/${pred.max}")
-        while (oidBuffer.position < oidBuffer.limit) {
-            var oid = oidBuffer.getInt
-
-            while (tuple._1 > oid && oidBuffer.position < oidBuffer.limit) oid = oidBuffer.getInt
-
-            while (tuple._1 < oid && iter.hasNext) tuple = iter.next
-
-            if (pred.col.ord.gteq(tuple._2.asInstanceOf[pred.col.DataType], minVal) && pred.col.ord.lteq(tuple._2.asInstanceOf[pred.col.DataType], maxVal)) result.putInt(tuple._1)
-        }
-        info("End FetchSelect scan")
-        oidBuffer.rewind
-        result.flip
-        result
-    }
 }
 

@@ -1,6 +1,6 @@
 package immutable.operators
 
-import java.nio.ByteBuffer
+import java.nio.{IntBuffer, ByteBuffer}
 
 import immutable.LoggerHelper._
 import immutable._
@@ -9,28 +9,32 @@ import immutable.encoders.{Dict, Dense, Encoder}
 /**
   * Created by marcin on 3/7/16.
   */
-case class Project(cols: List[Column], oids: ByteBuffer, limit: Option[Int] = None) extends Iterable[Seq[_]] {
+case class Project(cols: List[Column], op: SelectionOperator, limit: Option[Int] = None) extends ProjectionOperator {
     debug("Enter Project")
     val iterator = new ProjectIterator()
 
     class ProjectIterator() extends Iterator[Seq[_]] {
-        var counter = 0
-        var oid: Int = 0
-        var bufferSize = oids.limit/4
-        val iterators = cols.map(x => {
+        var oids = IntBuffer.allocate(Config.vectorSize)
+        oids.flip
+
+        val encIters = cols.map(x => {
             val table = SchemaManager.getTable(x.tblName)
-            Operator.prepareBuffer(x, table)
+            SelectionOperator.prepareBuffer(x, table)
             x.getIterator
         })
 
         def next = {
-            oid = oids.getInt
-            counter += 1
-            iterators.map(x => { x.seek(oid); x.next._2 })
+            val oid = oids.get
+
+            encIters.map(x => {
+                x.seek(oid)
+                x.next._2
+            })
         }
 
         def hasNext = {
-            if (counter < bufferSize) true else false
+            if (!oids.hasRemaining) oids = op.iterator.next
+            if (oids.hasRemaining) true else false
         }
     }
 }

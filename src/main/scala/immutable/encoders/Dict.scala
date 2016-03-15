@@ -1,11 +1,11 @@
 package immutable.encoders
 
+import scala.collection.mutable
 import java.io._
 
 import immutable.helpers.Conversions
+import immutable.LoggerHelper._
 import immutable._
-
-import scala.collection.mutable
 
 /**
   * Created by marcin on 2/29/16.
@@ -14,32 +14,40 @@ import scala.collection.mutable
 case object Dict extends Encoder {
     def iterator(col: Column) = new DictIterator(col)
     def loader(col: Column) = new DictLoader(col)
+    private val lookups = mutable.Map[String, mutable.HashMap[_, Int]]()
 
     def lookup(col: Column): mutable.HashMap[col.DataType, Int] = {
-        // TODO: Lookups should be cached in some global
-        val dictValFile = new BufferedInputStream(
-            new FileInputStream(s"${Config.home}/${col.tblName}/${col.name}.dictval"),
-            Config.readBufferSize)
+        val lookupKey = s"${col.tblName}.${col.name}"
 
-        val lookup = mutable.HashMap[col.DataType, Int]()
+        if (lookups.contains(lookupKey)) lookups.get(lookupKey).get.asInstanceOf[mutable.HashMap[col.DataType, Int]]
+        else {
+            info(s"Creating lookup for ${col.name}")
+            val dictValFile = new BufferedInputStream(
+                new FileInputStream(s"${Config.home}/${col.tblName}/${col.name}.dictval"),
+                Config.readBufferSize)
 
-        val itemSize = Array[Byte](1)
-        dictValFile.read(itemSize)  // gets byte containing value size
-        var bytes = new Array[Byte](itemSize(0))
-        var bytesRead: Int = 0
+            val lookup = mutable.HashMap[col.DataType, Int]()
 
-        var i = 0
-        while (dictValFile.read(bytes) > 0) {
-            lookup += (col.bytesToValue(bytes) -> bytesRead)
-            i += 1
-
+            val itemSize = Array[Byte](1)
             dictValFile.read(itemSize)  // gets byte containing value size
+            var bytes = new Array[Byte](itemSize(0))
+            var bytesRead: Int = 0
 
-            bytesRead += bytes.length + 1 // Mark byte position of current item (+1 null byte)
+            var i = 0
+            while (dictValFile.read(bytes) > 0) {
+                lookup += (col.bytesToValue(bytes) -> bytesRead)
+                i += 1
 
-            bytes = new Array[Byte](itemSize(0))
+                dictValFile.read(itemSize)  // gets byte containing value size
+
+                bytesRead += bytes.length + 1 // Mark byte position of current item (+1 null byte)
+
+                bytes = new Array[Byte](itemSize(0))
+            }
+            info(s"Finished creating lookup for ${col.name}")
+            lookups.put(lookupKey, lookup)
+            lookup
         }
-        lookup
     }
 
     class DictIterator(col: Column, seek: Int=0) extends SeekableIterator[(Int, _)] {

@@ -6,5 +6,6 @@ package immutable
 object Config {
     val home = "/Users/marcin/correla"
     val readBufferSize = 4096
-    val loggerLevel = 'debug
+    val loggerLevel = 'DEBUG
+    val vectorSize = 1000
 }

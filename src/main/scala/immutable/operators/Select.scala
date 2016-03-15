@@ -1,6 +1,6 @@
 package immutable.operators
 
-import java.nio.ByteBuffer
+import java.nio.{IntBuffer, ByteBuffer}
 
 import immutable._
 import immutable.encoders.{Dict, Encoder}
@@ -9,91 +9,104 @@ import immutable.LoggerHelper._
 /**
   * Created by marcin on 2/26/16.
   */
+/*
+abstract Expr
+case class Num(num: Double) extends Expr
+case class Col(col: Column) extends Expr
+case class BinOp(f: (a: Expr, b: Expr) => Expr, a: Expr, b: Expr) extends Expr
 
-object Select {
-    def apply(pred: Range, useIntermediate: Boolean): ByteBuffer = {
-        info("Enter Select")
+FetchSelect(
+    FetchSelect(
+        Select(
+            BinOp(op: (a: Num, b: Num) => Num, Col("age"), Num(2)),
+            Range(25, 50)
+        ),
+        Expr(Col("fname"), Exact(List("Marcin", "Melissa"))
+    ),
+    Expr(Col("score1") + Expr(Col("score2")), Range(75, 100)
+)
+*/
 
-        val table = SchemaManager.getTable(pred.col.tblName)
-        Operator.prepareBuffer(pred.col, table)
+case class SelectRange(col: Column, min: String, max: String) extends SelectionOperator {
+    info(s"Invoke SelectRange scan ${col.name} ${min}/${max}")
+    val table = SchemaManager.getTable(col.tblName)
+    SelectionOperator.prepareBuffer(col, table)
 
-        // TODO: Make it so we're not loading iterator twice
-        val iter = pred.col.getIterator
-        val result = ByteBuffer.allocateDirect(table.size * 4)
-        val minVal = pred.col.stringToValue(pred.min)
-        val maxVal = pred.col.stringToValue(pred.max)
+    val iterator = new SelectIterator()
+    val minVal = col.stringToValue(min)
+    val maxVal = col.stringToValue(max)
 
-        info(s"Start Select scan ${pred.col.name} ${pred.min}/${pred.max}")
-        while(iter.hasNext) {
-            val tuple = iter.next
-            if (pred.col.ord.gteq(tuple._2.asInstanceOf[pred.col.DataType], minVal) && pred.col.ord.lteq(tuple._2.asInstanceOf[pred.col.DataType], maxVal)) {
-                result.putInt(tuple._1)
-            }
-        }
-        info("End Select scan")
-        result.flip
-        result
-    }
+    /**
+      * On each call return a vector of size Config.vectorSize.
+      * Caller is responsible to exhaust the vector and call next() again on iterator.
+      */
+    class SelectIterator extends Iterator[IntBuffer] {
+        val result = IntBuffer.allocate(Config.vectorSize)
+        val encIter = col.getIterator
 
-    def apply(pred: Exact, useIntermediate: Boolean)(implicit table: Table): ByteBuffer = {
-        info("Enter Select")
+        def next = {
+            result.clear
 
-        val table = SchemaManager.getTable(pred.col.tblName)
-        Operator.prepareBuffer(pred.col, table)
-
-        val iter = pred.col.getIterator
-        val result = ByteBuffer.allocateDirect(table.size * 4)
-
-        // Special case for Dict encoding where we need to string value has to be converted to Int.
-        info("Start exactVal")
-        val exactVal = pred.col.enc match {
-            case Dict => {
-                val lookup = Dict.lookup(pred.col)
-                pred.value.map(x => lookup.get(pred.col.stringToValue(x)).get)
-            }
-            case _ => pred.value.map(x => pred.col.stringToValue(x))
-        }
-
-        info(s"Start Select scan ${pred.col.name} ${pred.value}")
-
-        // Branching out depending if we're testing one value or more.
-        // Would like to find out if compile figure it out and .contains() should be used instead.
-        if (exactVal.size == 1) {
-            while(iter.hasNext) {
-                val tuple = iter.next
-                if (exactVal(0) == tuple._2) result.putInt(tuple._1)
-            }
-        } else {
-            while(iter.hasNext) {
-                val tuple = iter.next
-                if (exactVal.contains(tuple._2)) {
-                    if (result.position % 100000 == 0) info(s"${result.position}")
-                    result.putInt(tuple._1)
+            while(encIter.hasNext && result.hasRemaining) {
+                val tuple = encIter.next
+                if (col.ord.gteq(tuple._2.asInstanceOf[col.DataType], minVal) && col.ord.lteq(tuple._2.asInstanceOf[col.DataType], maxVal)) {
+                    result.put(tuple._1)
                 }
             }
+
+            result.flip
+            result
         }
-        info(s"End Select scan")
-        result.flip
-        result
+
+        def hasNext = if (encIter.hasNext) true else false
     }
+}
 
-    def apply(pred: Contains, useIntermediate: Boolean)(implicit table: Table): ByteBuffer = {
-        info("Enter Select")
-        val table = SchemaManager.getTable(pred.col.tblName)
+case class Select(col: Column, items: Seq[String]) extends SelectionOperator {
+    info(s"Start Select scan ${col.name} ${items}")
 
-        Operator.prepareBuffer(pred.col, table)
+    val table = SchemaManager.getTable(col.tblName)
+    SelectionOperator.prepareBuffer(col, table)
 
-        var iter = pred.col.getIterator
-        val result = ByteBuffer.allocate(table.size * 4)
+    val iterator = new SelectIterator()
 
-        info(s"Start Select scan ${pred.col.name} ${pred.value}")
-        while(iter.hasNext) {
-            val tuple = iter.next
-            if (pred.value.contains(tuple._2)) result.putInt(tuple._1)
+    class SelectIterator extends Iterator[IntBuffer] {
+        val result = IntBuffer.allocate(Config.vectorSize)
+        val encIter = col.getIterator
+
+        // Special case for Dict encoding where we need to string value has to be converted to Int.
+        val exactVal = col.enc match {
+            case Dict => {
+                val lookup = Dict.lookup(col)
+                items.map(x => lookup.get(col.stringToValue(x)).get)
+            }
+            case _ => items.map(x => col.stringToValue(x))
         }
-        info(s"End Select scan")
-        result.flip
-        result
+
+        def next = {
+            result.clear
+
+            // Branching out depending if we're testing one value or more.
+            // Would like to find out if compile figure it out and .contains() should be used instead.
+            if (exactVal.size == 1) {
+                while(encIter.hasNext && result.hasRemaining) {
+                    val tuple = encIter.next
+                    if (exactVal(0) == tuple._2) result.put(tuple._1)
+                }
+            } else {
+                while(encIter.hasNext && result.hasRemaining) {
+                    val tuple = encIter.next
+                    if (exactVal.contains(tuple._2)) {
+                        result.put(tuple._1)
+                    }
+                }
+            }
+
+            result.flip
+            result
+        }
+
+        def hasNext = if (encIter.hasNext) true else false
     }
 }
 

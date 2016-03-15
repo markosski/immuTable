@@ -15,41 +15,50 @@ import scala.collection.mutable
 
 object Main extends App {
     def small = {
-        implicit val table = Table.loadTable("correla_dataset_small_new")
+        val table = Table.loadTable("correla_dataset_small_new")
         SchemaManager.register(table)
 
         info("start --")
-        val res4 = Select(Range(table.getColumn[TinyIntColumn]("age"), "18", "70"), false)
-//        val res = Select(Exact(table.getColumn[VarCharColumn]("fname"), List("Jennie", "Bristol", "Cephus")), false)
-//        val res1 = FetchSelect(Exact(table.getColumn[FixedCharColumn]("state"), List("CT", "NY", "NJ")), res, false)
+//        val res = SelectRange(table.getColumn[TinyIntColumn]("age"), "18", "90")
+        val res = Select(table.getColumn[VarCharColumn]("fname"), List("Jennie", "Bristol", "Cephus"))
+        val res1 = FetchSelectMatch(table.getColumn[FixedCharColumn]("state"), List("CT", "NY", "NJ"), res)
+        val res2 = FetchSelectRange(table.getColumn[TinyIntColumn]("age"), "18", "35", res1)
+//        val vec = res.iterator.next
+//        while(vec.hasRemaining) println(vec.get)
+
 //        val res2 = FetchSelect(Range(table.getColumn[TinyIntColumn]("score2"), "18", "100"), res1, false)
 //        val res3 = FetchSelect(Range(table.getColumn[TinyIntColumn]("score3"), "18", "100"), res2, false)
-//        val res4 = FetchSelect(Range(table.getColumn[TinyIntColumn]("age"), "18", "70"), res3, false)
 
 //        Intermediate(table.getColumn[TinyIntColumn]("age"), table).encode(res)
 //        Intermediate(table.getColumn[FixedCharColumn]("state"), table).encode(inter)
+
+//        println(res.foldLeft(0)((a, b) => a + b.limit))
 
         val result = Project(List(
             table.getColumn[VarCharColumn]("fname"),
             table.getColumn[FixedCharColumn]("state"),
             table.getColumn[TinyIntColumn]("age")
-        ), res4).iterator
+        ), res2)
+        result.take(100).foreach(x => println(x))
 
-        result.take(10).foreach(x => println(x))
+//        res2.foreach(x => {
+//            while (x.hasRemaining) {
+//                println(x.get)
+//            }
+//        })
 
         info("end --")
 
     }
 
     def big = {
-        implicit val table = Table.loadTable("immutable2_100mil")
+        val table = Table.loadTable("immutable2_100mil")
         SchemaManager.register(table)
 
         info("start --")
-//        val res2 = Select(Range(table.getColumn[TinyIntColumn]("age"), "18", "70"), false)
-        val res = Select(Exact(table.getColumn[VarCharColumn]("fname"), List("Jennie", "Bristol", "Cephus")), false)
-        val res1 = FetchSelect(Exact(table.getColumn[FixedCharColumn]("state"), List("CT", "NY", "NJ")), res, false)
-        val res2 = FetchSelect(Range(table.getColumn[TinyIntColumn]("age"), "18", "70"), res1, false)
+        val res = Select(table.getColumn[VarCharColumn]("fname"), List("Jennie", "Bristol", "Cephus"))
+        val res1 = FetchSelectRange(table.getColumn[TinyIntColumn]("age"), "18", "70", res)
+        val res2 = FetchSelectMatch(table.getColumn[FixedCharColumn]("state"), List("CT"), res1)
 
         val result = Project(List(
             table.getColumn[VarCharColumn]("fname"),
@@ -57,8 +66,7 @@ object Main extends App {
             table.getColumn[TinyIntColumn]("age")
         ), res2)
 
-        result.take(10).foreach(x => println(x))
-
+        result.take(1000).foreach(x => println(x))
         info("end --")
     }
 
@@ -72,4 +80,5 @@ object Main extends App {
             case _ => println("unknown command")}
     }
     chooseOption
+//    big
 }

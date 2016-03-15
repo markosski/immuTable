@@ -1,5 +1,7 @@
 package immutable.operators
 
+import java.nio.IntBuffer
+
 import immutable.LoggerHelper._
 import immutable.encoders.{Dict, Dense}
 import immutable.{Config, Table}
@@ -11,7 +13,15 @@ import scala.util.{Try, Failure, Success}
   * Created by marcin on 2/26/16.
   *
   */
-object Operator {
+trait SelectionOperator extends Iterable[IntBuffer] {
+    val iterator: Iterator[IntBuffer]
+}
+
+trait ProjectionOperator extends Iterable[Seq[_]] {
+    val iterator: Iterator[Seq[_]]
+}
+
+object SelectionOperator {
     // TODO: This functionality should be somewhere in Encoder.
     def prepareBuffer(col: Column, table: Table): Unit = {
         val ext = col match {

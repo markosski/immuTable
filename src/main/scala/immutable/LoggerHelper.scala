@@ -13,10 +13,10 @@ object LoggerHelper {
     val log = Logger.getLogger("immutable")
 
     Config.loggerLevel match {
-        case 'debug => log.setLevel(Level.DEBUG)
-        case 'info => log.setLevel(Level.INFO)
-        case 'warn => log.setLevel(Level.WARN)
-        case 'error => log.setLevel(Level.ERROR)
+        case 'DEBUG => log.setLevel(Level.DEBUG)
+        case 'INFO => log.setLevel(Level.INFO)
+        case 'WARN => log.setLevel(Level.WARN)
+        case 'ERROR => log.setLevel(Level.ERROR)
     }
 
     def info(message: String) = log.info(message)
