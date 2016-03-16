@@ -33,6 +33,7 @@ trait Column {
     def validate(s: String): Unit
     def getIterator = enc.iterator(this)
     def getLoader = enc.loader(this)
+    def FQN = s"${tblName}.${name}"
 }
 
 case class FixedCharColumn(name: String, tblName: String, size: Int, enc: Encoder) extends Column with CharColumn {

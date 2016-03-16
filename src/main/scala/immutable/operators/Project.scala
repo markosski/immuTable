@@ -1,10 +1,8 @@
 package immutable.operators
 
-import java.nio.{IntBuffer, ByteBuffer}
-
+import java.nio.{IntBuffer}
 import immutable.LoggerHelper._
 import immutable._
-import immutable.encoders.{Dict, Dense, Encoder}
 
 /**
   * Created by marcin on 3/7/16.

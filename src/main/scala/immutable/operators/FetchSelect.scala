@@ -16,19 +16,19 @@ case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperat
     SelectionOperator.prepareBuffer(col, table)
     val iterator = new FetchSelectIterator()
 
+    val exactVal = col.enc match {
+        case Dict => {
+            val lookup = Dict.lookup(col)
+            items.map(x => lookup.get(col.stringToValue(x)).get)
+        }
+        case _ => items.map(x => col.stringToValue(x))
+    }
+
     class FetchSelectIterator extends Iterator[IntBuffer] {
         val result = IntBuffer.allocate(Config.vectorSize)
         val encIter = col.getIterator
         var oids = IntBuffer.allocate(Config.vectorSize)
         oids.flip
-
-        val exactVal = col.enc match {
-            case Dict => {
-                val lookup = Dict.lookup(col)
-                items.map(x => lookup.get(col.stringToValue(x)).get)
-            }
-            case _ => items.map(x => col.stringToValue(x))
-        }
 
         def next = {
             result.clear

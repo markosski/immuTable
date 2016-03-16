@@ -39,11 +39,11 @@ object SelectionOperator {
             }
         }
 
-        Try(BufferManager.get(col.name)) match {
+        Try(BufferManager.get(col.FQN)) match {
             case Success(x) => info(s"Buffer ${col.name} already registered.")
             case Failure(e) => {
-                info(s"Registering new buffer: ${col.name}")
-                BufferManager.registerFromFile(col.name, s"${Config.home}/${table.name}/${col.name}.${ext}", col.size)
+                info(s"Registering new buffer: ${col.FQN}")
+                BufferManager.registerFromFile(col.FQN, s"${Config.home}/${table.name}/${col.name}.${ext}", col.size)
             }
         }
     }

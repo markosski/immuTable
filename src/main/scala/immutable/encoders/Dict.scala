@@ -14,7 +14,7 @@ import immutable._
 case object Dict extends Encoder {
     def iterator(col: Column) = new DictIterator(col)
     def loader(col: Column) = new DictLoader(col)
-    private val lookups = mutable.Map[String, mutable.HashMap[_, Int]]()
+    val lookups = mutable.Map[String, mutable.HashMap[_, Int]]()
 
     def lookup(col: Column): mutable.HashMap[col.DataType, Int] = {
         val lookupKey = s"${col.tblName}.${col.name}"
@@ -46,14 +46,14 @@ case object Dict extends Encoder {
             }
             info(s"Finished creating lookup for ${col.name}")
             lookups.put(lookupKey, lookup)
+            dictValFile.close
             lookup
         }
     }
 
     class DictIterator(col: Column, seek: Int=0) extends SeekableIterator[(Int, _)] {
         val table = SchemaManager.getTable(col.tblName)
-
-        val bofFile = BufferManager.get(col.name)
+        val bofFile = BufferManager.get(col.FQN)
         seek(seek)
 
         var bytes = new Array[Byte](4)

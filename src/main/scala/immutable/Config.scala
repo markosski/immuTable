@@ -7,5 +7,5 @@ object Config {
     val home = "/Users/marcin/correla"
     val readBufferSize = 4096
     val loggerLevel = 'DEBUG
-    val vectorSize = 1000
+    val vectorSize = 100
 }

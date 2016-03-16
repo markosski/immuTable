@@ -48,7 +48,8 @@ case object Dense extends Encoder {
         }
 
         def finish: Unit = {
-            varFile.close()
+            varFile.flush
+            varFile.close
         }
     }
 
@@ -66,14 +67,14 @@ case object Dense extends Encoder {
             }
         }
         def finish = {
+            colFile.flush
             colFile.close
         }
     }
 
     class FixedCharNumericIterator(col: Column, seek: Int=0) extends SeekableIterator[(Int, _)] {
         val table = SchemaManager.getTable(col.tblName)
-
-        val file = BufferManager.get(col.name)
+        val file = BufferManager.get(col.FQN)
         seek(seek)
 
         var bytes = new Array[Byte](col.size)
@@ -96,8 +97,7 @@ case object Dense extends Encoder {
 
     class VarCharIterator(col: Column, seek: Int=0) extends SeekableIterator[(Int, _)] {
         val table = SchemaManager.getTable(col.tblName)
-
-        val varFile = BufferManager.get(col.name)
+        val varFile = BufferManager.get(col.FQN)
 
         var counter = 0
         def next: (Int, _) = {
