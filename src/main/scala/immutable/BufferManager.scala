@@ -1,7 +1,7 @@
 package immutable
 
 import java.io.RandomAccessFile
-import java.nio.MappedByteBuffer
+import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
 
 import scala.collection.mutable
@@ -59,10 +59,10 @@ object BufferManager {
       * @param name
      * @return
      */
-    def get(name: String, index: Int = 0): MappedByteBuffer = {
+    def get(name: String, index: Int = 0): ByteBuffer = {
         Try(mbuffers(name)(index)) match {
-            case Success(x) => x
-            case Failure(e) => throw new Exception("Buffer was not found.")
+            case Success(x) => x.duplicate()
+            case Failure(e) => throw new Exception(s"Buffer ${name} was not found.")
         }
     }
 }

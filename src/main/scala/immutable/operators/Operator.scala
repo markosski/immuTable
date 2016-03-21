@@ -14,11 +14,11 @@ import scala.util.{Try, Failure, Success}
   *
   */
 trait SelectionOperator extends Iterable[IntBuffer] {
-    val iterator: Iterator[IntBuffer]
+    def iterator: Iterator[IntBuffer]
 }
 
 trait ProjectionOperator extends Iterable[Seq[_]] {
-    val iterator: Iterator[Seq[_]]
+    def iterator: Iterator[Seq[_]]
 }
 
 object SelectionOperator {
@@ -40,7 +40,7 @@ object SelectionOperator {
         }
 
         Try(BufferManager.get(col.FQN)) match {
-            case Success(x) => info(s"Buffer ${col.name} already registered.")
+            case Success(x) => info(s"Buffer ${col.FQN} already registered.")
             case Failure(e) => {
                 info(s"Registering new buffer: ${col.FQN}")
                 BufferManager.registerFromFile(col.FQN, s"${Config.home}/${table.name}/${col.name}.${ext}", col.size)
@@ -48,29 +48,4 @@ object SelectionOperator {
         }
     }
 }
-//
-//object SelectSpecial extends Operator {
-//    def apply[A](col: Column[A], exact: String)(implicit table: Table): ByteBuffer = {
-//        val datFile = BufferManager.get(col.name)
-//        datFile.position(0)
-//
-//        val fileSize = col.size * table.size
-//        var bytes = new Array[Byte](4)
-//        var result = ByteBuffer.allocate(table.size)
-//        var counter = 0
-//
-//        val exactVal = exact.toInt
-//
-//        while (counter < table.size) {
-//            datFile.get(bytes)
-//            val value = Conversions.bytesToInt(bytes)
-//
-//            if (value == exactVal) {
-//                result.putInt(counter - 1)
-//            }
-//            counter += 1
-//        }
-//        result.flip
-//        result
-//    }
-//}
+

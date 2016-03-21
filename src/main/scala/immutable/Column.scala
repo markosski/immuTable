@@ -9,6 +9,7 @@ import immutable.LoggerHelper._
 
 trait NumericColumn {
     type DataType
+    implicit val num: Numeric[DataType]
     val min: DataType
     val max: DataType
     val nullVal: DataType
@@ -18,8 +19,9 @@ trait CharColumn {
     val nullVal: Byte = 0
 }
 
-trait Column {
+trait Column extends {
     type DataType
+    type AltDataType
     implicit val ord: Ordering[DataType]
 
     val name: String
@@ -38,6 +40,7 @@ trait Column {
 
 case class FixedCharColumn(name: String, tblName: String, size: Int, enc: Encoder) extends Column with CharColumn {
     type DataType = String
+    type AltDataType = Int
     val ord = implicitly[Ordering[DataType]]
 
     def stringToValue(s: String): String = s.slice(0, size)
@@ -56,6 +59,7 @@ case class FixedCharColumn(name: String, tblName: String, size: Int, enc: Encode
 case class VarCharColumn(name: String, tblName: String, size: Int, enc: Encoder)
         extends Column with CharColumn {
     type DataType = String
+    type AltDataType = Int
     val ord = implicitly[Ordering[DataType]]
 
     def stringToValue(s: String): String = s.slice(0, size)
@@ -75,12 +79,14 @@ case class VarCharColumn(name: String, tblName: String, size: Int, enc: Encoder)
 case class TinyIntColumn(name: String, tblName: String, enc: Encoder)
         extends Column with NumericColumn {
     type DataType = Byte
+    type AltDataType = DataType
     val ord = implicitly[Ordering[DataType]]
+    val num = implicitly[Numeric[DataType]]
 
 
     val nullVal = Byte.MinValue
     val min = (Byte.MinValue + 1).toByte
-    val max = Byte.MaxValue
+    val max = Byte.MaxValue.toByte
     val size = 1
 
     def stringToValue(s: String): Byte = s.toByte
@@ -98,11 +104,13 @@ case class TinyIntColumn(name: String, tblName: String, enc: Encoder)
 case class ShortIntColumn(name: String, tblName: String, enc: Encoder)
         extends Column with NumericColumn {
     type DataType = Short
+    type AltDataType = DataType
     val ord = implicitly[Ordering[DataType]]
+    val num = implicitly[Numeric[DataType]]
 
     val nullVal = Short.MinValue
     val min = (Short.MinValue + 1).toShort
-    val max = Short.MaxValue
+    val max = Short.MaxValue.toShort
     val size = 2
 
     def stringToValue(s: String): Short = s.toShort
@@ -122,7 +130,9 @@ case class ShortIntColumn(name: String, tblName: String, enc: Encoder)
 case class IntColumn(name: String, tblName: String, enc: Encoder)
         extends Column with NumericColumn {
     type DataType = Int
+    type AltDataType = DataType
     val ord = implicitly[Ordering[DataType]]
+    val num = implicitly[Numeric[DataType]]
 
     val nullVal = Int.MinValue
     val min = Int.MinValue + 1
@@ -149,7 +159,9 @@ case class DecimalColumn(name: String, tblName: String, enc: Encoder)
      * http://stackoverflow.com/questions/9810010/scala-library-to-convert-numbers-int-long-double-to-from-arraybyte
      */
     type DataType = Double
+    type AltDataType = DataType
     val ord = implicitly[Ordering[DataType]]
+    val num = implicitly[Numeric[DataType]]
 
     val nullVal = Int.MinValue.toDouble
     val min = Int.MinValue.toDouble + 1

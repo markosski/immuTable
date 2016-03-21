@@ -17,9 +17,7 @@ case object Dict extends Encoder {
     val lookups = mutable.Map[String, mutable.HashMap[_, Int]]()
 
     def lookup(col: Column): mutable.HashMap[col.DataType, Int] = {
-        val lookupKey = s"${col.tblName}.${col.name}"
-
-        if (lookups.contains(lookupKey)) lookups.get(lookupKey).get.asInstanceOf[mutable.HashMap[col.DataType, Int]]
+        if (lookups.contains(col.FQN)) lookups.get(col.FQN).get.asInstanceOf[mutable.HashMap[col.DataType, Int]]
         else {
             info(s"Creating lookup for ${col.name}")
             val dictValFile = new BufferedInputStream(
@@ -45,7 +43,7 @@ case object Dict extends Encoder {
                 bytes = new Array[Byte](itemSize(0))
             }
             info(s"Finished creating lookup for ${col.name}")
-            lookups.put(lookupKey, lookup)
+            lookups.put(col.FQN, lookup)
             dictValFile.close
             lookup
         }

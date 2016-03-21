@@ -23,7 +23,7 @@ case class Table(name: String, columns: Column*) extends Serializable {
         _size
     }
 
-    def getColumn[A](name: String) = {
+    def column[A](name: String) = {
         _columns.get(name) match {
             case Some(x) => x.asInstanceOf[A]
             case _ => throw new Exception(s"Column of name ${name} does not exists in this table.")

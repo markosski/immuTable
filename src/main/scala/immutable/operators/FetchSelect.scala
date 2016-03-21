@@ -11,10 +11,16 @@ import immutable.LoggerHelper._
   */
 
 case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperator) extends SelectionOperator {
-    debug(s"Start FetchSelect scan ${col.name} ${items}")
-    val table = SchemaManager.getTable(col.tblName)
-    SelectionOperator.prepareBuffer(col, table)
-    val iterator = new FetchSelectIterator()
+    debug(s"Using operator: $toString")
+
+    SelectionOperator.prepareBuffer(
+        col,
+        SchemaManager.getTable(col.tblName)
+    )
+
+    override def toString = s"FetchSelect ${col.name} ${items}"
+
+    def iterator = new FetchSelectIterator()
 
     val exactVal = col.enc match {
         case Dict => {
@@ -25,94 +31,85 @@ case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperat
     }
 
     class FetchSelectIterator extends Iterator[IntBuffer] {
-        val result = IntBuffer.allocate(Config.vectorSize)
         val encIter = col.getIterator
+        val opIter = op.iterator
         var oids = IntBuffer.allocate(Config.vectorSize)
-        oids.flip
+        if (opIter.hasNext)
+            oids = opIter.next
 
         def next = {
-            result.clear
+            val result = IntBuffer.allocate(Config.vectorSize)
 
-            col.enc match {
-                case Dict => {
-                    while (encIter.hasNext && result.hasRemaining) {
-                        if (!oids.hasRemaining && op.iterator.hasNext) oids = op.iterator.next
+            while (result.hasRemaining && encIter.hasNext) {
+                if (!oids.hasRemaining && opIter.hasNext)
+                    oids = opIter.next
 
-                        if (oids.hasRemaining) {
-                            var tuple = encIter.next
-                            var oid = oids.get
+                if (oids.hasRemaining) {
+                    var tuple = encIter.next
+                    var oid = oids.get
 
-                            while (tuple._1 > oid && oids.hasRemaining) oid = oids.get
+                    while (tuple._1 > oid && oids.hasRemaining)
+                        oid = oids.get
 
-                            while (tuple._1 < oid && encIter.hasNext) tuple = encIter.next
+                    while (tuple._1 < oid && encIter.hasNext)
+                        tuple = encIter.next
 
-                            if (tuple._1 == oid && exactVal.contains(tuple._2)) {
-                                result.put(tuple._1)
-                            }
-                        } else {
-                            result.limit(result.position) // will cause hasRamaining == false
-                        }
-                    }
-                }
-                case _ => {
-//                    while (encIter.hasNext && result.hasRemaining) {
-//                        if (!oids.hasRemaining && op.iterator.hasNext) oids = op.iterator.next
-//
-//                        if (oids.hasRemaining) {
-//                            var tuple = encIter.next
-//                            var oid = oids.get
-//
-//                            while (tuple._1 > oid && oids.hasRemaining) oid = oids.get
-//
-//                            while (tuple._1 < oid && encIter.hasNext) tuple = encIter.next
-//
-//                            if (tuple._1 == oid && exactVal.contains(tuple._2)) {
-//                                result.put(tuple._1)
-//                            }
-//                        } else {
-//                            result.limit(result.position)
-//                        }
-//                    }
+                    if (tuple._1 == oid && exactVal.contains(tuple._2))
+                        result.put(tuple._1)
+
+                } else {
+                    result.limit(result.position)
                 }
             }
+
+//            col.enc match {
+//                case Dict => {
+//                }
+//                case _ => {  }
+//            }
             result.flip
             result
         }
 
-        def hasNext = if (op.iterator.hasNext) true else false
+        def hasNext = if (oids.hasRemaining || opIter.hasNext) true else false
     }
+
 }
 
-case class FetchSelectRange(col: Column, min: String, max: String, op: SelectionOperator) extends SelectionOperator {
-    info(s"Start FetchSelect ${col.name} ${min}/${max}")
-    val table = SchemaManager.getTable(col.tblName)
-    SelectionOperator.prepareBuffer(col, table)
-    val iterator = new FetchSelectRangeIterator()
-    val minVal = col.stringToValue(min)
-    val maxVal = col.stringToValue(max)
+case class FetchSelectRange(col: Column, left: String, right: String, op: SelectionOperator) extends SelectionOperator {
+    info(s"Using operator: $toString")
+
+    SelectionOperator.prepareBuffer(
+        col,
+        SchemaManager.getTable(col.tblName)
+    )
+
+    override def toString = s"FetchSelect ${col.name} ${left}/${right}"
+
+    def iterator = new FetchSelectRangeIterator()
 
     class FetchSelectRangeIterator extends Iterator[IntBuffer] {
+        val minVal = col.stringToValue(left)
+        val maxVal = col.stringToValue(right)
+
         val encIter = col.getIterator
-        val result = IntBuffer.allocate(Config.vectorSize)
+        val opIter = op.iterator
         var oids = IntBuffer.allocate(Config.vectorSize)
-        oids.flip
+        if (opIter.hasNext)
+            oids = opIter.next
 
         def next = {
-            result.clear
+            val result = IntBuffer.allocate(Config.vectorSize)
 
-            while (encIter.hasNext && result.hasRemaining) {
-                if (!oids.hasRemaining && op.iterator.hasNext) oids = op.iterator.next
+            while (result.hasRemaining && encIter.hasNext) {
+                if (!oids.hasRemaining && opIter.hasNext)
+                    oids = opIter.next
 
                 if (oids.hasRemaining) {
-                    var tuple = encIter.next
-                    var oid = oids.get()
+                    encIter.seek(oids.get)
+                    val tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
 
-                    while (tuple._1 > oid && oids.hasRemaining) oid = oids.get()
-
-                    while (tuple._1 < oid && encIter.hasNext) tuple = encIter.next
-
-                    if (col.ord.gteq(tuple._2.asInstanceOf[col.DataType], minVal)
-                            && col.ord.lteq(tuple._2.asInstanceOf[col.DataType], maxVal)) {
+                    if (col.ord.gteq(tuple._2, minVal) && col.ord.lteq(tuple._2, maxVal)) {
                         result.put(tuple._1)
                     }
                 } else {
@@ -120,13 +117,33 @@ case class FetchSelectRange(col: Column, min: String, max: String, op: Selection
                 }
             }
 
+
+//            while (result.hasRemaining && encIter.hasNext) {
+//                if (!oids.hasRemaining && opIter.hasNext)
+//                    oids = opIter.next
+//
+//                if (oids.hasRemaining) {
+//                    var tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
+//                    var oid = oids.get
+//
+//                    while (tuple._1 > oid && oids.hasRemaining)
+//                        oid = oids.get
+//
+//                    while (tuple._1 < oid && encIter.hasNext)
+//                        tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
+//
+//                    if (col.ord.gteq(tuple._2, minVal) && col.ord.lteq(tuple._2, maxVal)) {
+//                        result.put(tuple._1)
+//                    }
+//                } else {
+//                    result.limit(result.position)
+//                }
+//            }
             result.flip
             result
         }
 
-        def hasNext = if (op.iterator.hasNext) true else false
+        def hasNext = if (oids.hasRemaining || opIter.hasNext) true else false
     }
-
-
 }
 

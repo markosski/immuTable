@@ -27,14 +27,17 @@ FetchSelect(
 )
 */
 
-case class SelectRange(col: Column, min: String, max: String) extends SelectionOperator {
-    info(s"Invoke SelectRange scan ${col.name} ${min}/${max}")
+case class SelectRange(col: Column, left: String, right: String) extends SelectionOperator {
+    debug(s"Using operator: $toString")
+
     val table = SchemaManager.getTable(col.tblName)
     SelectionOperator.prepareBuffer(col, table)
 
-    val iterator = new SelectIterator()
-    val minVal = col.stringToValue(min)
-    val maxVal = col.stringToValue(max)
+    def iterator = new SelectIterator()
+    val minVal = col.stringToValue(left)
+    val maxVal = col.stringToValue(right)
+
+    override def toString = s"Select ${left}/${right}"
 
     /**
       * On each call return a vector of size Config.vectorSize.
@@ -62,19 +65,20 @@ case class SelectRange(col: Column, min: String, max: String) extends SelectionO
     }
 }
 
-case class Select(col: Column, items: Seq[String]) extends SelectionOperator {
-    info(s"Start Select scan ${col.name} ${items}")
+case class SelectMatch(col: Column, items: Seq[String]) extends SelectionOperator {
+    debug(s"Using operator: $toString")
 
-    val table = SchemaManager.getTable(col.tblName)
-    SelectionOperator.prepareBuffer(col, table)
+    def iterator = new SelectIterator()
 
-    val iterator = new SelectIterator()
+    SelectionOperator.prepareBuffer(
+        col,
+        SchemaManager.getTable(col.tblName)
+    )
+
+    override def toString = s"Select ${items}"
 
     class SelectIterator extends Iterator[IntBuffer] {
-        val result = IntBuffer.allocate(Config.vectorSize)
         val encIter = col.getIterator
-
-        // Special case for Dict encoding where we need to string value has to be converted to Int.
         val exactVal = col.enc match {
             case Dict => {
                 val lookup = Dict.lookup(col)
@@ -83,22 +87,24 @@ case class Select(col: Column, items: Seq[String]) extends SelectionOperator {
             case _ => items.map(x => col.stringToValue(x))
         }
 
+        // Special case for Dict encoding where we need to string value has to be converted to Int.
+
         def next = {
-            result.clear
+            val result = IntBuffer.allocate(Config.vectorSize)
 
             // Branching out depending if we're testing one value or more.
             // Would like to find out if compile figure it out and .contains() should be used instead.
             if (exactVal.size == 1) {
                 while(encIter.hasNext && result.hasRemaining) {
                     val tuple = encIter.next
-                    if (exactVal(0) == tuple._2) result.put(tuple._1)
+                    if (exactVal(0) == tuple._2)
+                        result.put(tuple._1)
                 }
             } else {
                 while(encIter.hasNext && result.hasRemaining) {
                     val tuple = encIter.next
-                    if (exactVal.contains(tuple._2)) {
+                    if (exactVal.contains(tuple._2))
                         result.put(tuple._1)
-                    }
                 }
             }
 
