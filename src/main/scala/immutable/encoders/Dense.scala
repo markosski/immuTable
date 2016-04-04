@@ -1,6 +1,7 @@
 package immutable.encoders
 
 import java.io.{FileOutputStream, BufferedOutputStream}
+import java.nio.{IntBuffer, ByteBuffer}
 
 import immutable.{Config, Table}
 import immutable.helpers.Conversions
@@ -18,39 +19,13 @@ case object Dense extends Encoder {
     def loader(col: Column): Loader = col match {
         case col: NumericColumn => new DenseLoader(col)
         case col: FixedCharColumn => new DenseLoader(col)
-        case col: VarCharColumn => new DenseVarCharLoader(col)
         case _ => throw new Exception("Unsupported column type for this encoder.")
     }
 
-    // TODO: Somehow pass table size information
-    def iterator(col: Column): SeekableIterator[(Int, _)] = col match {
+    def iterator(col: Column): SeekableIterator[Array[Byte]] = col match {
         case col: NumericColumn => new FixedCharNumericIterator(col)
         case col: FixedCharColumn => new FixedCharNumericIterator(col)
-        case col: VarCharColumn => new VarCharIterator(col)
         case _ => throw new Exception("Unsupported column type for this iterator.")
-    }
-
-    class DenseVarCharLoader(col: Column) extends Loader {
-        val varFile = new BufferedOutputStream(
-            new FileOutputStream(s"${Config.home}/${col.tblName}/${col.name}.densevar", false),
-            Config.readBufferSize)
-
-        def load(data: Vector[String]): Unit = {
-            var i = 0
-            while (i < data.size) {
-                val field_val = col.stringToValue(data(i))
-                val itemSize = math.min(col.stringToBytes(data(i)).length, col.size)
-                varFile.write(itemSize.toByte)
-                varFile.write(col.stringToBytes(field_val.toString))
-
-                i += 1
-            }
-        }
-
-        def finish: Unit = {
-            varFile.flush
-            varFile.close
-        }
     }
 
     class DenseLoader(col: Column) extends Loader {
@@ -61,7 +36,11 @@ case object Dense extends Encoder {
         def load(data: Vector[String]): Unit = {
             var i = 0
             while (i < data.size) {
-                val field_val = col.stringToBytes(data(i))
+                val field_val = data(i) match {
+                    case "null" => col.stringToBytes(col.nullVal.toString)
+                    case _ => col.stringToBytes(data(i))
+                }
+
                 colFile.write(field_val)
                 i += 1
             }
@@ -72,50 +51,34 @@ case object Dense extends Encoder {
         }
     }
 
-    class FixedCharNumericIterator(col: Column, seek: Int=0) extends SeekableIterator[(Int, _)] {
+    class FixedCharNumericIterator(col: Column, seek: Int=0) extends SeekableIterator[Array[Byte]] {
         val table = SchemaManager.getTable(col.tblName)
         val file = BufferManager.get(col.FQN)
-        seek(seek)
 
-        var bytes = new Array[Byte](col.size)
         var counter = 0
-        def next: (Int, _) = {
-            file.get(bytes)
-            counter += 1
-            (counter - 1, col.bytesToValue(bytes))
+
+        def next = {
+            var bytes = Array[Byte]()
+
+            if (file.limit - file.position > Config.vectorSize * col.size) {
+                bytes = new Array[Byte](Config.vectorSize * col.size)
+                file.get(bytes)
+                counter += Config.vectorSize
+            } else {
+                bytes = new Array[Byte](file.limit - file.position)
+                file.get(bytes)
+                counter += (file.limit - file.position) / col.size
+            }
+            bytes
         }
 
         def hasNext = {
-            if (counter < table.size) true else false
+            if (counter < file.limit / col.size) true else false
         }
 
         def seek(loc: Int) = {
             file.position(loc * col.size)
             counter = loc
-        }
-    }
-
-    class VarCharIterator(col: Column, seek: Int=0) extends SeekableIterator[(Int, _)] {
-        val table = SchemaManager.getTable(col.tblName)
-        val varFile = BufferManager.get(col.FQN)
-
-        var counter = 0
-        def next: (Int, _) = {
-            val byte: Byte = varFile.get()  // gets byte containing value size
-            val bytes = new Array[Byte](byte)
-
-            varFile.get(bytes)
-
-            counter += 1
-            (counter - 1, col.bytesToValue(bytes))
-        }
-
-        def hasNext = {
-            if (counter < table.size) true else false
-        }
-
-        def seek(loc: Int) = {
-
         }
     }
 }

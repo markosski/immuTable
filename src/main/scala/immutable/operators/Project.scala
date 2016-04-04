@@ -3,13 +3,19 @@ package immutable.operators
 import java.nio.{IntBuffer}
 import immutable.LoggerHelper._
 import immutable._
+import immutable.encoders.Dense
+import immutable.helpers.Conversions
 
 import scala.collection.mutable
 
 /**
-  * Created by marcin on 3/7/16.
+  * This projection operator does not take any selection operators. It will simply iterate over selected columns
+  * and produce results. This would be used typically for getting N first records etc.
+  * TODO: Another variation is needed for aggregated operator and groupedBy.
+  *        Maybe it would be better to make Projections be more flexible instead of creating many variations.
+  *
+  * @param limit
   */
-
 case class ProjectPass(limit: Option[Int] = None) extends ProjectionOperator {
     def iterator = new ProjectPassIterator()
 
@@ -19,41 +25,54 @@ case class ProjectPass(limit: Option[Int] = None) extends ProjectionOperator {
     }
 }
 
+/**
+  * This projection operator can accept list of columns to materialize.
+  * TODO: Add functionality to create in-memory tables as a result of projection operator.
+  *
+  * @param cols
+  * @param op
+  * @param limit
+  */
 case class Project(cols: List[Column], op: SelectionOperator, limit: Option[Int] = None) extends ProjectionOperator {
     debug("Enter Project")
     val opIter = op.iterator
     def iterator = new ProjectIterator()
 
     class ProjectIterator extends Iterator[Seq[Any]] {
-        var oids = IntBuffer.allocate(Config.vectorSize)
-        if (opIter.hasNext)
-            oids = opIter.next
-
-        // TODO: Prevent from lookups to the same column if specified more than once.
-        val encIters = cols.map(x => {
-            SelectionOperator.prepareBuffer(
-                x,
-                SchemaManager.getTable(x.tblName)
-            )
-            x.getIterator
-        })
+        var dataVecCounter = 0
+        var dataVec = opIter.next
+        var selected = dataVec.selected.iterator
 
         def next = {
-            if (!oids.hasRemaining && opIter.hasNext)
-                oids = opIter.next
+            var record: List[Int] = List()
+            var oid = 0
+//            if (selected.hasNext) oid = selected.next + dataVec.currentOID
+//
+//            for (i <- 0 until dataVec.data.length) {
+//                record = Conversions.bytesToInt(dataVec.data(i).slice(oid, 1)) :: record
+//            }
+//            dataVecCounter += 1
+//
+//            if (dataVecCounter == Config.vectorSize - 1) {
+//                dataVec = opIter.next
+//                dataVecCounter = 0
+//            }
 
-            val oid = oids.get
-
-            encIters.map(x => {
-                x.seek(oid)
-                x.next._2
-            })
+            oid :: record
         }
 
-        def hasNext = if (oids.hasRemaining || opIter.hasNext) true else false
+        def hasNext = if (dataVecCounter < dataVec.selected.size - 1 || opIter.hasNext) true else false
     }
 }
 
+/**
+  * This projection operator access columns that are used in groupBy and list of aggregators e.g. SUM, MIN, MAX.
+ *
+  * @param cols
+  * @param aggrs
+  * @param op
+  * @param groupBy
+  */
 case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator], op: SelectionOperator, groupBy: Option[Column] = None) extends ProjectionOperator {
     def iterator = groupBy match {
         case Some(x) => new ProjectAggregateGroupByIterator()
@@ -62,37 +81,41 @@ case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator]
 
     class ProjectAggregateIterator extends Iterator[Seq[Any]] {
         val opIter = op.iterator
-        var oids = IntBuffer.allocate(Config.vectorSize)
-        if (opIter.hasNext)
-            oids = opIter.next
-
-        val encIters = aggrs.map(x => {
-            SelectionOperator.prepareBuffer(x.col, SchemaManager.getTable(x.col.tblName))
-            x.col.getIterator
-        })
+//        val encIters = aggrs.map(x => {
+//            SelectionOperator.prepareBuffer(x.col, SchemaManager.getTable(x.col.tblName))
+//            x.col.getIterator
+//        })
+        var vecData = opIter.next
+        var selection = vecData.selected.iterator
+        var vecCounter = 0
 
         def next = {
-            while (oids.hasRemaining) {
-                val oid = oids.get
+            while (vecData.selected.size == 0 && hasNext)
+                vecData = opIter.next
 
-                if (!oids.hasRemaining && opIter.hasNext)
-                    oids = opIter.next
-
-                for (i <- 0 until aggrs.size) {
-                    encIters(i).seek(oid)
-                    val tuple = encIters(i).next
+            if (selection.hasNext) {
+                val selIdx = selection.next
+                for (i <- 0 until vecData.cols.size) {
+                    val tuple = vecData.cols(i).enc match {
+                        case Dense => (vecData.vecID + selIdx, vecData.cols(i).bytesToValue(vecData.data(i).slice(selIdx * 4, 4)))
+                        case _ => (vecData.vecID + selIdx, vecData.cols(i).bytesToValue(vecData.data(i).slice(selIdx * vecData.cols(i).size, vecData.cols(i).size)))
+                    }
                     val aggr = aggrs(i)
 
-                    aggr.add(tuple._2.asInstanceOf[aggr.T])
+                    if (i == 1)
+                        aggr.add(tuple._2.asInstanceOf[aggr.T])
                 }
-
-                if (!oids.hasRemaining) oids = opIter.next
+                vecCounter += 1
+            } else if (opIter.hasNext) {
+                vecData = opIter.next
+                selection = vecData.selected.iterator
+                vecCounter += 0
             }
 
             aggrs.map(x => x.get.asInstanceOf[Any])
         }
 
-        def hasNext = if (oids.hasRemaining) true else false
+        def hasNext = if (opIter.hasNext) true else false
     }
 
     class ProjectAggregateGroupByIterator extends Iterator[Seq[Any]] {
@@ -103,8 +126,8 @@ case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator]
         val opIter = op.iterator
         val groupMap = mutable.HashMap[col.DataType, List[Int]]()
         var oids = IntBuffer.allocate(Config.vectorSize)
-        if (op.iterator.hasNext)
-            oids = opIter.next
+//        if (op.iterator.hasNext)
+//            oids = opIter.next
 
         val encIters = aggrs.map(x => {
             SelectionOperator.prepareBuffer(x.col, SchemaManager.getTable(x.col.tblName))
@@ -122,8 +145,8 @@ case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator]
                 groupMap.put(tuple._2, List(tuple._1))
             }
 
-            if (!oids.hasRemaining && opIter.hasNext)
-                oids = opIter.next
+//            if (!oids.hasRemaining && opIter.hasNext)
+//                oids = opIter.next
         }
 
         val mapIter = groupMap.iterator
@@ -138,7 +161,8 @@ case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator]
                 val tuple = encIters(i).next
                 val aggr = aggrs(i)
 
-                aggr.add(tuple._2.asInstanceOf[aggr.T])
+                List()
+//                aggr.add(tuple._2.asInstanceOf[aggr.T])
             }
 
             item._1 :: aggrs.map(x => x.get.asInstanceOf[Any])
@@ -147,3 +171,38 @@ case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator]
         def hasNext = if (mapIter.hasNext) true else false
     }
 }
+
+/**
+  * Experimental projection operator that operates on input operators in parallel.
+  */
+//case class ProjectConcurrent(cols: List[Column], op: SelectionOperator) extends ProjectionOperator {
+//    debug("Enter ProjectConcurrent")
+//
+//    import scala.concurrent.ExecutionContext.Implicits.global
+//    import scala.concurrent.Future
+//
+//    val concurrency = 4
+//    val opIters = List.fill(concurrency)(op.iterator)
+//    def iterator = new ProjectConcurrentIterator()
+//
+//    class ProjectConcurrentIterator extends Iterator[Seq[_]] {
+//        var oidsPool = List.fill(concurrency)(IntBuffer.allocate(Config.vectorSize))
+//        opIters.map(x => Future(x.next))
+//
+//
+//        def next = {
+//            if (!oids.hasRemaining && opIter.hasNext)
+//                oids = opIter.next
+//
+//            val oid = oids.get
+//
+//            encIters.map(x => {
+//                x.seek(oid)
+//                x.next._2
+//            })
+//        }
+//
+//
+//        def hasNext = if (oids.hasRemaining || opIter.hasNext) true else false
+//    }
+//}

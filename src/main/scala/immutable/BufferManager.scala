@@ -61,7 +61,7 @@ object BufferManager {
      */
     def get(name: String, index: Int = 0): ByteBuffer = {
         Try(mbuffers(name)(index)) match {
-            case Success(x) => x.duplicate()
+            case Success(x) => x.duplicate();
             case Failure(e) => throw new Exception(s"Buffer ${name} was not found.")
         }
     }

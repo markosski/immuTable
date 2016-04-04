@@ -1,5 +1,7 @@
 package immutable.encoders
 
+import java.nio.{ByteBuffer, IntBuffer}
+
 import scala.collection.mutable
 import java.io._
 
@@ -49,22 +51,29 @@ case object Dict extends Encoder {
         }
     }
 
-    class DictIterator(col: Column, seek: Int=0) extends SeekableIterator[(Int, _)] {
+    class DictIterator(col: Column, seek: Int=0) extends SeekableIterator[Array[Byte]] {
         val table = SchemaManager.getTable(col.tblName)
         val bofFile = BufferManager.get(col.FQN)
-        seek(seek)
 
-        var bytes = new Array[Byte](4)
         var counter = 0
 
         def next = {
-            bofFile.get(bytes)
-            counter += 1
-            (counter - 1, Conversions.bytesToInt(bytes))
+            var bytes = Array[Byte]()
+
+            if (bofFile.limit - bofFile.position > Config.vectorSize * 4) {
+                bytes = new Array[Byte](Config.vectorSize * 4)
+                counter += Config.vectorSize
+                bofFile.get(bytes)
+            } else {
+                bytes = new Array[Byte](bofFile.limit - bofFile.position)
+                counter += (bofFile.limit - bofFile.position) / 4
+                bofFile.get(bytes)
+            }
+            bytes
         }
 
         def hasNext = {
-            if (counter < table.size) true else false
+            if (counter * 4 < bofFile.limit) true else false
         }
 
         def seek(loc: Int) = {
@@ -90,7 +99,10 @@ case object Dict extends Encoder {
 
             var i: Int = 0
             while (i < data.size) {
-                val field_val = col.stringToValue(data(i))
+                val field_val: col.DataType = data(i) match {
+                    case "null" => col.nullVal
+                    case _ => col.stringToValue(data(i))
+                }
                 val itemSize = col.stringToBytes(
                     col.stringToValue(data(i)).toString
                     ).length

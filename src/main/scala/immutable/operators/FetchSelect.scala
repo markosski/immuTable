@@ -6,6 +6,8 @@ import immutable._
 import immutable.encoders.{Dict}
 import immutable.LoggerHelper._
 
+import scala.collection.mutable.BitSet
+
 /**
   * Created by marcin on 2/26/16.
   */
@@ -30,50 +32,42 @@ case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperat
         case _ => items.map(x => col.stringToValue(x))
     }
 
-    class FetchSelectIterator extends Iterator[IntBuffer] {
-        val encIter = col.getIterator
-        val opIter = op.iterator
-        var oids = IntBuffer.allocate(Config.vectorSize)
-        if (opIter.hasNext)
-            oids = opIter.next
-
-        def next = {
-            val result = IntBuffer.allocate(Config.vectorSize)
-
-            while (result.hasRemaining && encIter.hasNext) {
-                if (!oids.hasRemaining && opIter.hasNext)
-                    oids = opIter.next
-
-                if (oids.hasRemaining) {
-                    var tuple = encIter.next
-                    var oid = oids.get
-
-                    while (tuple._1 > oid && oids.hasRemaining)
-                        oid = oids.get
-
-                    while (tuple._1 < oid && encIter.hasNext)
-                        tuple = encIter.next
-
-                    if (tuple._1 == oid && exactVal.contains(tuple._2))
-                        result.put(tuple._1)
-
-                } else {
-                    result.limit(result.position)
-                }
-            }
-
-//            col.enc match {
-//                case Dict => {
-//                }
-//                case _ => {  }
-//            }
-            result.flip
-            result
-        }
-
-        def hasNext = if (oids.hasRemaining || opIter.hasNext) true else false
+    def getTuple(dataVec: (IntBuffer, ByteBuffer), valSize: Int) = {
+        val bytes = new Array[Byte](valSize)
+        dataVec._2.get(bytes)
+        (dataVec._1.get, bytes)
     }
 
+    class FetchSelectIterator extends Iterator[DataVector] {
+        val opIter = op.iterator
+        var dataVecCounter = 0
+        var dataVecColPos: Int = _
+
+        def next = {
+            var dataVec = opIter.next
+            while (dataVec.selected.size == 0 && hasNext)
+                dataVec = opIter.next
+
+            val size = dataVec.data(0).size
+
+            dataVec.cols.zipWithIndex.foreach(x => if (x._1 == col.name) dataVecColPos = x._2)
+            var selection = BitSet()
+
+            while (dataVecCounter < size - 1) {
+                val value = dataVec.data(dataVecColPos)(dataVecCounter)
+
+                if (exactVal.contains(value)) {
+                    selection.add(dataVecCounter)
+                }
+                dataVecCounter += 1
+            }
+
+            dataVec.selected = dataVec.selected & selection
+            dataVec
+        }
+
+        def hasNext = if (opIter.hasNext) true else false
+    }
 }
 
 case class FetchSelectRange(col: Column, left: String, right: String, op: SelectionOperator) extends SelectionOperator {
@@ -88,62 +82,40 @@ case class FetchSelectRange(col: Column, left: String, right: String, op: Select
 
     def iterator = new FetchSelectRangeIterator()
 
-    class FetchSelectRangeIterator extends Iterator[IntBuffer] {
+    class FetchSelectRangeIterator extends Iterator[DataVector] {
         val minVal = col.stringToValue(left)
         val maxVal = col.stringToValue(right)
 
-        val encIter = col.getIterator
         val opIter = op.iterator
-        var oids = IntBuffer.allocate(Config.vectorSize)
-        if (opIter.hasNext)
-            oids = opIter.next
+        var dataVecCounter = 0
+        var dataVecColPos: Int = _
 
         def next = {
-            val result = IntBuffer.allocate(Config.vectorSize)
+            var dataVec = opIter.next  // get a data vector of Config.vectorSize
+            while (dataVec.selected.size == 0 && hasNext)
+                dataVec = opIter.next
 
-            while (result.hasRemaining && encIter.hasNext) {
-                if (!oids.hasRemaining && opIter.hasNext)
-                    oids = opIter.next
+            val size = dataVec.data(0).size
 
-                if (oids.hasRemaining) {
-                    encIter.seek(oids.get)
-                    val tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
+            dataVec.cols.zipWithIndex.foreach(x => if (x._1 == col.name) dataVecColPos = x._2)
+            var selection = BitSet()
 
-                    if (col.ord.gteq(tuple._2, minVal) && col.ord.lteq(tuple._2, maxVal)) {
-                        result.put(tuple._1)
-                    }
-                } else {
-                    result.limit(result.position)
+            while (dataVecCounter < size - 1) {
+                val value = dataVec.data(dataVecColPos)(dataVecCounter)
+
+                if (col.ord.gteq(value.asInstanceOf[col.DataType], minVal) && col.ord.lteq(value.asInstanceOf[col.DataType], maxVal)) {
+                    selection.add(dataVecCounter)
                 }
+                dataVecCounter += 1
             }
 
+            dataVec.selected = dataVec.selected & selection
 
-//            while (result.hasRemaining && encIter.hasNext) {
-//                if (!oids.hasRemaining && opIter.hasNext)
-//                    oids = opIter.next
-//
-//                if (oids.hasRemaining) {
-//                    var tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
-//                    var oid = oids.get
-//
-//                    while (tuple._1 > oid && oids.hasRemaining)
-//                        oid = oids.get
-//
-//                    while (tuple._1 < oid && encIter.hasNext)
-//                        tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
-//
-//                    if (col.ord.gteq(tuple._2, minVal) && col.ord.lteq(tuple._2, maxVal)) {
-//                        result.put(tuple._1)
-//                    }
-//                } else {
-//                    result.limit(result.position)
-//                }
-//            }
-            result.flip
-            result
+            dataVecCounter = 0
+            dataVec
         }
 
-        def hasNext = if (oids.hasRemaining || opIter.hasNext) true else false
+        def hasNext = if (opIter.hasNext) true else false
     }
 }
 
