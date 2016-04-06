@@ -54,15 +54,15 @@ object Table {
                 }
 
                 val newColumn = col.get("type").asString match {
-                    case "TinyIntType" => TinyIntColumn(name, tblName, Dense)
-                    case "ShortIntType" => ShortIntColumn(name, tblName, Dense)
-                    case "IntType" => IntColumn(name, tblName, Dense)
-                    case "FixedCharType" => encoder match {
+                    case "TinyInt" => TinyIntColumn(name, tblName, Dense)
+                    case "ShortInt" => ShortIntColumn(name, tblName, Dense)
+                    case "Int" => IntColumn(name, tblName, Dense)
+                    case "FixedChar" => encoder match {
                         case 'Dense => FixedCharColumn(name, tblName, size, Dense)
                         case 'Dict => FixedCharColumn(name, tblName, size, Dict)
                         case _ => throw new Exception("Encoder not compatible with this data type.")
                     }
-                    case "VarCharType" => VarCharColumn(name, tblName, size, Dict)
+                    case "VarChar" => VarCharColumn(name, tblName, size, Dict)
                     case _ => throw new Exception("Column definition not recognized.")
                 }
 
