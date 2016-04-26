@@ -7,19 +7,7 @@ import immutable.LoggerHelper._
  * http://ktoso.github.io/scala-types-of-types/
  */
 
-trait NumericColumn {
-    type DataType
-    implicit val num: Numeric[DataType]
-    val min: DataType
-    val max: DataType
-    val nullVal: DataType
-}
-
-trait CharColumn {
-    val nullVal: Byte = 0
-}
-
-trait Column extends {
+trait Column {
     type DataType
     type AltDataType
     implicit val ord: Ordering[DataType]
@@ -28,7 +16,7 @@ trait Column extends {
     val tblName: String
     val size: Int
     val enc: Encoder
-    val nullRepr = "NULL"
+    val nullRepr = "null"
     def stringToValue(s: String): DataType
     def stringToBytes(s: String): Array[Byte]
     def bytesToValue(bytes: Array[Byte]): DataType
@@ -38,12 +26,28 @@ trait Column extends {
     def FQN = s"${tblName}.${name}"
 }
 
-case class FixedCharColumn(name: String, tblName: String, size: Int, enc: Encoder) extends Column with CharColumn {
+trait NumericColumn extends Column {
+    type DataType
+    implicit val num: Numeric[DataType]
+    val min: DataType
+    val max: DataType
+    val nullVal: DataType
+}
+
+trait CharColumn extends Column {
+    val nullVal: Array[Byte]
+}
+
+case class FixedCharColumn(name: String, tblName: String, size: Int, enc: Encoder) extends CharColumn {
     type DataType = String
     type AltDataType = Int
     val ord = implicitly[Ordering[DataType]]
+    val nullVal = new Array[Byte](size)
 
-    def stringToValue(s: String): String = s.slice(0, size)
+    def stringToValue(s: String): String = s match {
+        case "null" => bytesToValue(nullVal)
+        case _ => s.slice(0, size)
+    }
 
     def stringToBytes(s: String): Array[Byte] = s.getBytes.slice(0, size).padTo(size, 0.toByte)
 
@@ -56,13 +60,16 @@ case class FixedCharColumn(name: String, tblName: String, size: Int, enc: Encode
     }
 }
 
-case class VarCharColumn(name: String, tblName: String, size: Int, enc: Encoder)
-        extends Column with CharColumn {
+case class VarCharColumn(name: String, tblName: String, size: Int, enc: Encoder) extends CharColumn {
     type DataType = String
     type AltDataType = Int
     val ord = implicitly[Ordering[DataType]]
+    val nullVal = new Array[Byte](size)
 
-    def stringToValue(s: String): String = s.slice(0, size)
+    def stringToValue(s: String): String = s match {
+        case "null" => bytesToValue(nullVal)
+        case _ => s.slice(0, size)
+    }
 
     def stringToBytes(s: String): Array[Byte] = s.getBytes.slice(0, size)
 
@@ -76,8 +83,7 @@ case class VarCharColumn(name: String, tblName: String, size: Int, enc: Encoder)
 }
 
 
-case class TinyIntColumn(name: String, tblName: String, enc: Encoder)
-        extends Column with NumericColumn {
+case class TinyIntColumn(name: String, tblName: String, enc: Encoder) extends NumericColumn {
     type DataType = Byte
     type AltDataType = DataType
     val ord = implicitly[Ordering[DataType]]
@@ -89,7 +95,10 @@ case class TinyIntColumn(name: String, tblName: String, enc: Encoder)
     val max = Byte.MaxValue.toByte
     val size = 1
 
-    def stringToValue(s: String): Byte = s.toByte
+    def stringToValue(s: String): Byte = s match {
+        case "null" => nullVal
+        case _ => s.toByte
+    }
 
     def stringToBytes(s: String): Array[Byte] = Array[Byte](s.toByte)
 
@@ -101,8 +110,7 @@ case class TinyIntColumn(name: String, tblName: String, enc: Encoder)
     }
 }
 
-case class ShortIntColumn(name: String, tblName: String, enc: Encoder)
-        extends Column with NumericColumn {
+case class ShortIntColumn(name: String, tblName: String, enc: Encoder) extends NumericColumn {
     type DataType = Short
     type AltDataType = DataType
     val ord = implicitly[Ordering[DataType]]
@@ -113,7 +121,10 @@ case class ShortIntColumn(name: String, tblName: String, enc: Encoder)
     val max = Short.MaxValue.toShort
     val size = 2
 
-    def stringToValue(s: String): Short = s.toShort
+    def stringToValue(s: String): Short = s match {
+        case "null" => nullVal
+        case _ => s.toShort
+    }
 
     def stringToBytes(s: String): Array[Byte] = {
         List(8).foldLeft(Array[Byte]((stringToValue(s) & 0xFF).toByte))((b, a) => b ++ Array[Byte](((stringToValue(s) >> a) & 0xFF).toByte))
@@ -127,8 +138,7 @@ case class ShortIntColumn(name: String, tblName: String, enc: Encoder)
     }
 }
 
-case class IntColumn(name: String, tblName: String, enc: Encoder)
-        extends Column with NumericColumn {
+case class IntColumn(name: String, tblName: String, enc: Encoder) extends NumericColumn {
     type DataType = Int
     type AltDataType = DataType
     val ord = implicitly[Ordering[DataType]]
@@ -139,7 +149,10 @@ case class IntColumn(name: String, tblName: String, enc: Encoder)
     val max = Int.MaxValue
     val size = 4
 
-    def stringToValue(s: String): Int = s.toInt
+    def stringToValue(s: String): Int = s match {
+        case "null" => nullVal
+        case _ => s.toInt
+    }
 
     def stringToBytes(s: String): Array[Byte] = {
         List(8, 16, 24).foldLeft(Array[Byte]((stringToValue(s) & 0xFF).toByte))((b, a) => b ++ Array[Byte](((stringToValue(s) >> a) & 0xFF).toByte))
@@ -153,8 +166,7 @@ case class IntColumn(name: String, tblName: String, enc: Encoder)
     }
 }
 
-case class DecimalColumn(name: String, tblName: String, enc: Encoder)
-        extends Column with NumericColumn {
+case class DecimalColumn(name: String, tblName: String, enc: Encoder) extends NumericColumn {
     /**
      * http://stackoverflow.com/questions/9810010/scala-library-to-convert-numbers-int-long-double-to-from-arraybyte
      */
@@ -174,7 +186,10 @@ case class DecimalColumn(name: String, tblName: String, enc: Encoder)
         for (i <- 0 to 7) a(i) = ((l >> ((7 - i) * 8)) & 0xff).toByte
         a
     }
-    def stringToValue(s: String) = s.toDouble
+    def stringToValue(s: String) = s match {
+        case "null" => nullVal
+        case _ => s.toDouble
+    }
 
     def bytesToValue(bytes: Array[Byte]) = {
         var i = 0

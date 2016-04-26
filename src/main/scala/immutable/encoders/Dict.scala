@@ -11,9 +11,10 @@ import immutable._
   * Created by marcin on 2/29/16.
   */
 
-case object Dict extends Encoder {
+case object Dict extends Encoder with EncoderDescriptor {
     def iterator(col: Column) = new DictIterator(col)
     def loader(col: Column) = new DictLoader(col)
+    def descriptor(col: Column) = new DictBlockDescriptorNew(col)
     val lookups = mutable.Map[String, mutable.HashMap[_, Int]]()
 
     def lookup(col: Column): mutable.HashMap[col.DataType, Int] = {
@@ -71,6 +72,8 @@ case object Dict extends Encoder {
             bofFile.position(loc * 4)
             counter = loc
         }
+
+        def position = counter
     }
 
     case class DictLoader(col: Column) extends Loader {
@@ -85,7 +88,7 @@ case object Dict extends Encoder {
         val offsetLookup = mutable.HashMap[col.DataType, Int]()
         var bytesWritten: Int = 0
 
-        def load(data: Vector[String]) = {
+        def write(data: Vector[String]) = {
             var OID: Int = 0
 
             var i: Int = 0
@@ -110,11 +113,40 @@ case object Dict extends Encoder {
             }
         }
 
-        def finish = {
+        def close = {
             bofFile.flush
             bofFile.close
             varFile.flush
             varFile.close
+        }
+    }
+
+    class DictBlockDescriptor(val col: Column) extends BlockDescriptor[CharDescriptorNgram[_]] {
+        def add(vec: Vector[String]) = {
+            val ngrams = mutable.HashMap[String, Int]()
+
+            vec.foreach(x => {
+                val v = x.toLowerCase.slice(0, 2)
+                ngrams.get(v) match {
+                    case Some(x) => ngrams.update(v, x + 1)
+                    case _ => ngrams += (v -> 1)
+                }
+            })
+
+            descriptors = descriptors :+ CharDescriptorNgram[col.DataType](ngrams)
+        }
+    }
+
+    class DictBlockDescriptorNew(val col: Column) extends BlockDescriptor[CharDescriptorBloom[_]] {
+        def add(vec: Vector[String]) = {
+            val ngrams = mutable.HashMap[String, Int]()
+            val bloom = new Bloom(Config.bulkLoad.vectorSize, 0.1)
+
+            vec.foreach(x => {
+                bloom.add(x.toLowerCase)
+            })
+
+            descriptors = descriptors :+ CharDescriptorBloom[col.DataType](bloom)
         }
     }
 }

@@ -1,9 +1,9 @@
 package immutable.operators
 
-import java.nio.{IntBuffer, ByteBuffer}
+import java.nio.IntBuffer
 
 import immutable._
-import immutable.encoders.{Dict}
+import immutable.encoders.{CharDescriptorBloom, EncoderDescriptor, Dict}
 import immutable.LoggerHelper._
 
 /**
@@ -45,28 +45,16 @@ case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperat
                     oids = opIter.next
 
                 if (oids.hasRemaining) {
-                    var tuple = encIter.next
-                    var oid = oids.get
+                    encIter.seek(oids.get)
+                    val tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
 
-                    while (tuple._1 > oid && oids.hasRemaining)
-                        oid = oids.get
-
-                    while (tuple._1 < oid && encIter.hasNext)
-                        tuple = encIter.next
-
-                    if (tuple._1 == oid && exactVal.contains(tuple._2))
+                    if (exactVal.contains(tuple._2))
                         result.put(tuple._1)
-
                 } else {
                     result.limit(result.position)
                 }
             }
 
-//            col.enc match {
-//                case Dict => {
-//                }
-//                case _ => {  }
-//            }
             result.flip
             result
         }
@@ -116,29 +104,6 @@ case class FetchSelectRange(col: Column, left: String, right: String, op: Select
                     result.limit(result.position)
                 }
             }
-
-
-//            while (result.hasRemaining && encIter.hasNext) {
-//                if (!oids.hasRemaining && opIter.hasNext)
-//                    oids = opIter.next
-//
-//                if (oids.hasRemaining) {
-//                    var tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
-//                    var oid = oids.get
-//
-//                    while (tuple._1 > oid && oids.hasRemaining)
-//                        oid = oids.get
-//
-//                    while (tuple._1 < oid && encIter.hasNext)
-//                        tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
-//
-//                    if (col.ord.gteq(tuple._2, minVal) && col.ord.lteq(tuple._2, maxVal)) {
-//                        result.put(tuple._1)
-//                    }
-//                } else {
-//                    result.limit(result.position)
-//                }
-//            }
             result.flip
             result
         }

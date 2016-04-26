@@ -1,12 +1,11 @@
 package immutable.encoders
 
-import java.io.RandomAccessFile
+import java.io._
 
 import immutable._
-import immutable.{NumericColumn}
-import immutable.helpers._
-
-import immutable.LoggerHelper._
+import scala.collection.mutable
+import scala.reflect.runtime.universe._
+import scala.util.hashing.MurmurHash3
 
 /**
   * Created by marcin on 2/26/16.
@@ -19,66 +18,58 @@ trait Encoder {
         def seek(pos: Int): Unit
         def next: A
         def hasNext: Boolean
+        def position: Int
     }
 
     trait Loader {
-        def load(data: Vector[String]): Unit
-        def finish: Unit
+        def write(data: Vector[String]): Unit
+        def close: Unit
     }
 }
 
+trait EncoderDescriptor {
+    def descriptor(col: Column): BlockDescriptor[_]
 
-object EncoderMain extends App {
-    import java.util.Date
-    info("Start...")
-    val start = new Date().getTime()
+    trait BlockDescriptor[A] {
+        var descriptors = Vector[A]()
+        val col: Column
 
-    val table = "correla_dataset_small"
-    val col = TinyIntColumn("age", table, Dense)
-    val repeatValueSize = 2
+        def add(vec: Vector[String]): Unit
 
-    val rlnFile = new RandomAccessFile(s"${Config.home}/$table/${col.name}.rle", "r")
-    val recordSize = 1000000
-
-    var bytes: Array[Byte] = new Array[Byte](col.size + repeatValueSize) // column size + 1 byte for repeat value
-    var repeat: Int = 0
-    var currentValue = col.bytesToValue(new Array[Byte](col.size))
-    var counter: Int = 0
-
-    while (counter <= recordSize) {
-        rlnFile.read(bytes)
-        currentValue = col.bytesToValue(bytes.slice(0, col.size))
-        repeat = Conversions.bytesToInt(bytes.slice(col.size,col.size + repeatValueSize))
-
-        if (repeat > 0) {
-            repeat -= 1
-            counter += 1
+        def read: Vector[A] = {
+            if (EncoderDescriptor.descriptors.contains(col.name)) {
+                EncoderDescriptor.descriptors.get(col.name).get.asInstanceOf[Vector[A]]
+            } else {
+                val is = new ObjectInputStream(new FileInputStream(s"${Config.home}/${col.tblName}/${col.name}.descriptor"))
+                val obj = is.readObject()
+                is.close
+                EncoderDescriptor.descriptors += (col.name -> obj.asInstanceOf[Vector[A]])
+                EncoderDescriptor.descriptors.get(col.name).get.asInstanceOf[Vector[A]]
+            }
         }
 
-        //        (counter - 1, currentValue)
+        def write = {
+            val os = new ObjectOutputStream(new FileOutputStream(s"${Config.home}/${col.tblName}/${col.name}.descriptor"))
+            os.writeObject(descriptors)
+            os.close
+        }
     }
-    println("All completed in: " + (new Date().getTime() - start).toString + "ms")
-    rlnFile.close()
-
-    //    val table = Table(
-    //        "correla_dataset_small",
-    //        TinyIntColumn("age", encoder='RunLength),
-    //        VarCharColumn("fname", 15),
-    //        VarCharColumn("lname", 30),
-    //        VarCharColumn("city", 30),
-    //        FixedCharColumn("state", 2, encoder='RunLength),
-    //        FixedCharColumn("zip", 5),
-    //        TinyIntColumn("score1"),
-    //        TinyIntColumn("score2"),
-    //        TinyIntColumn("score3"),
-    //        TinyIntColumn("score4")
-    //    )
-    //
-    //    val iter0 = Encoder.getColumnIterator(table.columns(0), table.name)
-    //    val iter1 = Encoder.getColumnIterator(table.columns(1), table.name)
-    //    val iter2 = Encoder.getColumnIterator(table.columns(2), table.name)
-    //    val iter4 = Encoder.getColumnIterator(table.columns(4), table.name)
-    //    for (i <- 0 until 100)
-    //        println(s"${iter0.next._2} ${iter1.next._2} ${iter2.next._2} ${iter4.next._2}")
 }
+
+object EncoderDescriptor {
+    val descriptors = mutable.HashMap[String, Vector[_]]()
+}
+
+trait DescriptorType extends Serializable {
+
+}
+
+@SerialVersionUID(100L)
+case class NumericDescriptor[A](val min: A, val max: A, val hist: (Array[Double], Array[Int])) extends Serializable
+
+@SerialVersionUID(101L)
+case class CharDescriptorNgram[A](val ngrams: mutable.HashMap[String, Int]) extends Serializable
+
+@SerialVersionUID(102L)
+case class CharDescriptorBloom[A](val filter: Bloom) extends Serializable
 

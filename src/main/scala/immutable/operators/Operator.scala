@@ -26,16 +26,18 @@ object SelectionOperator {
     def prepareBuffer(col: Column, table: Table): Unit = {
         val ext = col match {
             case x: VarCharColumn => x.enc match {
-                case Dense => "densevar"
                 case Dict => "dict"
+                case _ => throw new Exception("Codec not available for this column type.")
             }
             case x: FixedCharColumn => x.enc match {
                 case Dense => "dense"
                 case Dict => "dict"
+                case _ => throw new Exception("Codec not available for this column type.")
             }
             case x: NumericColumn => x.enc match {
                 case Dense => "dense"
                 case Dict => "dict"
+                case _ => throw new Exception("Codec not available for this column type.")
             }
         }
 

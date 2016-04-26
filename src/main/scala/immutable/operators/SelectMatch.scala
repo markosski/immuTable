@@ -3,7 +3,7 @@ package immutable.operators
 import java.nio.{IntBuffer, ByteBuffer}
 
 import immutable._
-import immutable.encoders.{Dict, Encoder}
+import immutable.encoders._
 import immutable.LoggerHelper._
 
 /**
@@ -46,11 +46,47 @@ case class SelectRange(col: Column, left: String, right: String) extends Selecti
     class SelectIterator extends Iterator[IntBuffer] {
         val result = IntBuffer.allocate(Config.vectorSize)
         val encIter = col.getIterator
+        val descriptor: Option[Vector[_]] = col.enc match {
+            case x: EncoderDescriptor => {
+                val encDesc = x.descriptor(col)
+                Some(encDesc.read)
+            }
+            case _ => None
+        }
+        var descriptorCounter = 0
+        var descriptorSkipped = 0
+
+        def checkDescriptor = {
+            descriptor match {
+                case Some(vec) => {
+                    var cont = true
+                    while (cont && descriptorCounter < vec.size - 1) {
+                        // TODO: Can TypeTag be used to recover this type?
+                        val v = vec(descriptorCounter).asInstanceOf[NumericDescriptor[col.DataType]]
+
+                        if (col.ord.lt(maxVal, v.min) || col.ord.gt(minVal, v.max)) {
+                            if (encIter.hasNext) {
+                                encIter.seek(descriptorCounter * Config.bulkLoad.vectorSize + Config.bulkLoad.vectorSize)
+                                descriptorCounter += 1
+                                descriptorSkipped += 1
+                            }
+                        } else {
+                            descriptorCounter += 1
+                            cont = false
+                        }
+                    }
+                }
+                case _ => Unit
+            }
+        }
 
         def next = {
             result.clear
 
             while(encIter.hasNext && result.hasRemaining) {
+                if (Config.Descriptors.enable && encIter.position % Config.bulkLoad.vectorSize == 0)
+                    checkDescriptor
+
                 val tuple = encIter.next
                 if (col.ord.gteq(tuple._2.asInstanceOf[col.DataType], minVal) && col.ord.lteq(tuple._2.asInstanceOf[col.DataType], maxVal)) {
                     result.put(tuple._1)
@@ -79,6 +115,8 @@ case class SelectMatch(col: Column, items: Seq[String]) extends SelectionOperato
 
     class SelectIterator extends Iterator[IntBuffer] {
         val encIter = col.getIterator
+
+        // TODO: If value does not exist in dict lookup return empty iterator
         val exactVal = col.enc match {
             case Dict => {
                 val lookup = Dict.lookup(col)
@@ -87,7 +125,39 @@ case class SelectMatch(col: Column, items: Seq[String]) extends SelectionOperato
             case _ => items.map(x => col.stringToValue(x))
         }
 
-        // Special case for Dict encoding where we need to string value has to be converted to Int.
+        val descriptor: Option[Vector[_]] = col.enc match {
+            case x: EncoderDescriptor => {
+                val encDesc = x.descriptor(col)
+                Some(encDesc.read)
+            }
+            case _ => None
+        }
+        var descriptorCounter = 0
+        var descriptorSkipped = 0
+
+        def checkDescriptor = {
+            descriptor match {
+                case Some(vec) => {
+                    var cont = true
+                    while (cont && descriptorCounter < vec.size - 1) {
+                        // TODO: Can TypeTag be used to recover this type?
+                        val v = vec(descriptorCounter).asInstanceOf[CharDescriptorBloom[col.DataType]]
+
+                        if (items.exists(x => if (v.filter.contains(x.toLowerCase)) true else false)) {
+                            cont = false
+                            descriptorCounter += 1
+                        } else {
+                            encIter.seek(descriptorCounter * Config.bulkLoad.vectorSize + Config.bulkLoad.vectorSize)
+                            if (encIter.hasNext) {
+                                descriptorCounter += 1
+                                descriptorSkipped += 1
+                            }
+                        }
+                    }
+                }
+                case _ => Unit
+            }
+        }
 
         def next = {
             val result = IntBuffer.allocate(Config.vectorSize)
@@ -96,12 +166,18 @@ case class SelectMatch(col: Column, items: Seq[String]) extends SelectionOperato
             // Would like to find out if compile figure it out and .contains() should be used instead.
             if (exactVal.size == 1) {
                 while(encIter.hasNext && result.hasRemaining) {
+                    if (Config.Descriptors.enable && encIter.position % Config.bulkLoad.vectorSize == 0)
+                        checkDescriptor
+
                     val tuple = encIter.next
                     if (exactVal(0) == tuple._2)
                         result.put(tuple._1)
                 }
             } else {
                 while(encIter.hasNext && result.hasRemaining) {
+                    if (Config.Descriptors.enable && encIter.position % Config.bulkLoad.vectorSize == 0)
+                        checkDescriptor
+
                     val tuple = encIter.next
                     if (exactVal.contains(tuple._2))
                         result.put(tuple._1)

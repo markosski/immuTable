@@ -49,6 +49,8 @@ case object RunLength extends Encoder {
             rlnFile.position(col.size * loc)
             counter = loc
         }
+
+        def position = counter
     }
 
     class RunLengthLoader(col: Column) extends Loader {
@@ -56,7 +58,7 @@ case object RunLength extends Encoder {
             new FileOutputStream(s"${Config.home}/${col.tblName}/${col.name}.rle", false),
             Config.readBufferSize)
 
-        def load(data: Vector[String]) = {
+        def write(data: Vector[String]) = {
             var repeat: Int = 0
             var lastValue = ""
             var i = 0
@@ -76,7 +78,7 @@ case object RunLength extends Encoder {
             }
         }
 
-        def finish = {
+        def close = {
             colFile.close()
         }
     }

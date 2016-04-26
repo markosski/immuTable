@@ -7,5 +7,13 @@ object Config {
     val home = "/Users/marcin/correla"
     val readBufferSize = 4096
     val loggerLevel = 'DEBUG
-    val vectorSize = 100
+    val vectorSize = 1
+
+    object bulkLoad {
+        val vectorSize = 8192
+    }
+
+    object Descriptors {
+        val enable = true
+    }
 }

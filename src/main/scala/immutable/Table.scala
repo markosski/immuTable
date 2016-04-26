@@ -63,7 +63,7 @@ object Table {
                         case _ => throw new Exception("Encoder not compatible with this data type.")
                     }
                     case "VarChar" => VarCharColumn(name, tblName, size, Dict)
-                    case _ => throw new Exception("Column definition not recognized.")
+                    case _ => throw new Exception(s"Column definition not recognized: ${col.get("type").asString}")
                 }
 
                 columns += newColumn

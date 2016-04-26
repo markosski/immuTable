@@ -20,9 +20,11 @@ case class ProjectPass(limit: Option[Int] = None) extends ProjectionOperator {
 }
 
 case class Project(cols: List[Column], op: SelectionOperator, limit: Option[Int] = None) extends ProjectionOperator {
-    debug("Enter Project")
+    debug(s"Using operator: $toString")
     val opIter = op.iterator
     def iterator = new ProjectIterator()
+
+    override def toString = s"Project ${cols}, ${op}, ${limit}"
 
     class ProjectIterator extends Iterator[Seq[Any]] {
         var oids = IntBuffer.allocate(Config.vectorSize)
@@ -55,10 +57,13 @@ case class Project(cols: List[Column], op: SelectionOperator, limit: Option[Int]
 }
 
 case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator], op: SelectionOperator, groupBy: Option[Column] = None) extends ProjectionOperator {
+    debug(s"Using operator: $toString")
     def iterator = groupBy match {
         case Some(x) => new ProjectAggregateGroupByIterator()
         case _ => new ProjectAggregateIterator()
     }
+
+    override def toString = s"ProjectAggregate ${cols}, ${aggrs}, ${op}, ${groupBy}"
 
     class ProjectAggregateIterator extends Iterator[Seq[Any]] {
         val opIter = op.iterator
