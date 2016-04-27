@@ -22,7 +22,7 @@ case object Dense extends Encoder {
         case _ => throw new Exception("Unsupported column type for this encoder.")
     }
 
-    def iterator(col: Column): SeekableIterator[Array[Byte]] = col match {
+    def iterator(col: Column): SeekableIterator[Vector[_]] = col match {
         case col: NumericColumn => new FixedCharNumericIterator(col)
         case col: FixedCharColumn => new FixedCharNumericIterator(col)
         case _ => throw new Exception("Unsupported column type for this iterator.")
@@ -51,25 +51,24 @@ case object Dense extends Encoder {
         }
     }
 
-    class FixedCharNumericIterator(col: Column, seek: Int=0) extends SeekableIterator[Array[Byte]] {
+    class FixedCharNumericIterator(val col: Column, seek: Int=0) extends SeekableIterator[Vector[_]] {
         val table = SchemaManager.getTable(col.tblName)
         val file = BufferManager.get(col.FQN)
 
         var counter = 0
 
         def next = {
-            var bytes = Array[Byte]()
+            val bytes = new Array[Byte](col.size)
+            var vec = Vector[col.DataType]()
 
-            if (file.limit - file.position > Config.vectorSize * col.size) {
-                bytes = new Array[Byte](Config.vectorSize * col.size)
+            val vecSize = if (file.remaining > Config.vectorSize * col.size) Config.vectorSize else (file.remaining / col.size)
+
+            for (i <- 0 until vecSize) {
                 file.get(bytes)
-                counter += Config.vectorSize
-            } else {
-                bytes = new Array[Byte](file.limit - file.position)
-                file.get(bytes)
-                counter += (file.limit - file.position) / col.size
+                vec = vec :+ col.bytesToValue(bytes)
+                counter += file.position / col.size
             }
-            bytes
+            vec
         }
 
         def hasNext = {

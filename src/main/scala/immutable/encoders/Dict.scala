@@ -51,33 +51,33 @@ case object Dict extends Encoder {
         }
     }
 
-    class DictIterator(col: Column, seek: Int=0) extends SeekableIterator[Array[Byte]] {
+    class DictIterator(val col: Column, seek: Int=0) extends SeekableIterator[Vector[_]] {
         val table = SchemaManager.getTable(col.tblName)
-        val bofFile = BufferManager.get(col.FQN)
+        val file = BufferManager.get(col.FQN)
+        val valSize = 4
 
         var counter = 0
 
         def next = {
-            var bytes = Array[Byte]()
+            val bytes = new Array[Byte](valSize)
+            var vec = Vector[Int]()
 
-            if (bofFile.limit - bofFile.position > Config.vectorSize * 4) {
-                bytes = new Array[Byte](Config.vectorSize * 4)
-                counter += Config.vectorSize
-                bofFile.get(bytes)
-            } else {
-                bytes = new Array[Byte](bofFile.limit - bofFile.position)
-                counter += (bofFile.limit - bofFile.position) / 4
-                bofFile.get(bytes)
+            val vecSize = if (file.remaining > Config.vectorSize * valSize) Config.vectorSize else (file.remaining / valSize)
+
+            for (i <- 0 until vecSize) {
+                file.get(bytes)
+                vec = vec :+ Conversions.bytesToInt(bytes)
+                counter += file.position / valSize
             }
-            bytes
+            vec
         }
 
         def hasNext = {
-            if (counter * 4 < bofFile.limit) true else false
+            if (counter * valSize < file.limit) true else false
         }
 
         def seek(loc: Int) = {
-            bofFile.position(loc * 4)
+            file.position(loc * valSize)
             counter = loc
         }
     }

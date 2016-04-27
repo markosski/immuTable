@@ -15,11 +15,6 @@ import scala.collection.mutable.BitSet
 case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperator) extends SelectionOperator {
     debug(s"Using operator: $toString")
 
-    SelectionOperator.prepareBuffer(
-        col,
-        SchemaManager.getTable(col.tblName)
-    )
-
     override def toString = s"FetchSelect ${col.name} ${items}"
 
     def iterator = new FetchSelectIterator()
@@ -40,26 +35,27 @@ case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperat
 
     class FetchSelectIterator extends Iterator[DataVector] {
         val opIter = op.iterator
-        var dataVecCounter = 0
-        var dataVecColPos: Int = _
+        var dataVecColPos: Int = 0
+        var dataVec = opIter.next
+        var dataVecSelected = dataVec.selected.iterator
+
+        dataVec.cols.zipWithIndex.foreach(x => if (x._1.name == col.name) dataVecColPos = x._2)
 
         def next = {
-            var dataVec = opIter.next
-            while (dataVec.selected.size == 0 && hasNext)
+            while (!dataVecSelected.hasNext && hasNext) {
                 dataVec = opIter.next
+                dataVecSelected = dataVec.selected.iterator
+            }
 
-            val size = dataVec.data(0).size
+            val selection = BitSet()
 
-            dataVec.cols.zipWithIndex.foreach(x => if (x._1 == col.name) dataVecColPos = x._2)
-            var selection = BitSet()
-
-            while (dataVecCounter < size - 1) {
-                val value = dataVec.data(dataVecColPos)(dataVecCounter)
+            while (dataVecSelected.hasNext) {
+                val selected = dataVecSelected.next
+                val value = dataVec.data(dataVecColPos)(selected)
 
                 if (exactVal.contains(value)) {
-                    selection.add(dataVecCounter)
+                    selection.add(selected)
                 }
-                dataVecCounter += 1
             }
 
             dataVec.selected = dataVec.selected & selection
@@ -73,11 +69,6 @@ case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperat
 case class FetchSelectRange(col: Column, left: String, right: String, op: SelectionOperator) extends SelectionOperator {
     info(s"Using operator: $toString")
 
-    SelectionOperator.prepareBuffer(
-        col,
-        SchemaManager.getTable(col.tblName)
-    )
-
     override def toString = s"FetchSelect ${col.name} ${left}/${right}"
 
     def iterator = new FetchSelectRangeIterator()
@@ -87,31 +78,31 @@ case class FetchSelectRange(col: Column, left: String, right: String, op: Select
         val maxVal = col.stringToValue(right)
 
         val opIter = op.iterator
-        var dataVecCounter = 0
-        var dataVecColPos: Int = _
+        var dataVec = opIter.next  // get a data vector of Config.vectorSize
+        var dataVecColPos: Int = 0
+        var dataVecSelected = dataVec.selected.iterator
 
         def next = {
-            var dataVec = opIter.next  // get a data vector of Config.vectorSize
-            while (dataVec.selected.size == 0 && hasNext)
+            while (!dataVecSelected.hasNext && hasNext) {
                 dataVec = opIter.next
+                dataVecSelected = dataVec.selected.iterator
+            }
 
+            val selection = BitSet()
             val size = dataVec.data(0).size
 
-            dataVec.cols.zipWithIndex.foreach(x => if (x._1 == col.name) dataVecColPos = x._2)
-            var selection = BitSet()
+            dataVec.cols.zipWithIndex.foreach(x => if (x._1.name == col.name) dataVecColPos = x._2)
 
-            while (dataVecCounter < size - 1) {
-                val value = dataVec.data(dataVecColPos)(dataVecCounter)
+            while (dataVecSelected.hasNext) {
+                val selected = dataVecSelected.next
+                val value = dataVec.data(dataVecColPos)(selected)
 
                 if (col.ord.gteq(value.asInstanceOf[col.DataType], minVal) && col.ord.lteq(value.asInstanceOf[col.DataType], maxVal)) {
-                    selection.add(dataVecCounter)
+                    selection.add(selected)
                 }
-                dataVecCounter += 1
             }
 
             dataVec.selected = dataVec.selected & selection
-
-            dataVecCounter = 0
             dataVec
         }
 

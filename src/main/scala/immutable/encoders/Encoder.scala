@@ -9,7 +9,7 @@ import immutable._
   */
 trait Encoder {
     def loader(col: Column): Loader
-    def iterator(col: Column): SeekableIterator[Array[Byte]]
+    def iterator(col: Column): SeekableIterator[Vector[_]]
 
     trait SeekableIterator[A] extends Iterator[A] {
         def seek(pos: Int): Unit

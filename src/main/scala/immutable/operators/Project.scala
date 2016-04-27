@@ -39,29 +39,40 @@ case class Project(cols: List[Column], op: SelectionOperator, limit: Option[Int]
     def iterator = new ProjectIterator()
 
     class ProjectIterator extends Iterator[Seq[Any]] {
-        var dataVecCounter = 0
         var dataVec = opIter.next
         var selected = dataVec.selected.iterator
+        var oid = 0
 
         def next = {
-            var record: List[Int] = List()
-            var oid = 0
-//            if (selected.hasNext) oid = selected.next + dataVec.currentOID
-//
-//            for (i <- 0 until dataVec.data.length) {
-//                record = Conversions.bytesToInt(dataVec.data(i).slice(oid, 1)) :: record
-//            }
-//            dataVecCounter += 1
-//
-//            if (dataVecCounter == Config.vectorSize - 1) {
-//                dataVec = opIter.next
-//                dataVecCounter = 0
-//            }
+            var record: List[Any] = List()
+
+            while (!selected.hasNext && opIter.hasNext) {
+                dataVec = opIter.next
+                selected = dataVec.selected.iterator
+            }
+
+            if (selected.hasNext) {
+                val localIdx = selected.next
+                oid = localIdx + dataVec.vecID * Config.vectorSize
+
+                for (i <- 0 until dataVec.data.length) {
+                    record = dataVec.data(i)(localIdx) :: record
+                }
+
+                if (!selected.hasNext && opIter.hasNext) {
+                    dataVec = opIter.next
+                }
+            }
+
+            while (!selected.hasNext && opIter.hasNext) {
+                dataVec = opIter.next
+                selected = dataVec.selected.iterator
+            }
 
             oid :: record
         }
 
-        def hasNext = if (dataVecCounter < dataVec.selected.size - 1 || opIter.hasNext) true else false
+        def hasNext = if (opIter.hasNext) true else false
     }
 }
 
@@ -90,27 +101,27 @@ case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator]
         var vecCounter = 0
 
         def next = {
-            while (vecData.selected.size == 0 && hasNext)
-                vecData = opIter.next
-
-            if (selection.hasNext) {
-                val selIdx = selection.next
-                for (i <- 0 until vecData.cols.size) {
-                    val tuple = vecData.cols(i).enc match {
-                        case Dense => (vecData.vecID + selIdx, vecData.cols(i).bytesToValue(vecData.data(i).slice(selIdx * 4, 4)))
-                        case _ => (vecData.vecID + selIdx, vecData.cols(i).bytesToValue(vecData.data(i).slice(selIdx * vecData.cols(i).size, vecData.cols(i).size)))
-                    }
-                    val aggr = aggrs(i)
-
-                    if (i == 1)
-                        aggr.add(tuple._2.asInstanceOf[aggr.T])
-                }
-                vecCounter += 1
-            } else if (opIter.hasNext) {
-                vecData = opIter.next
-                selection = vecData.selected.iterator
-                vecCounter += 0
-            }
+//            while (vecData.selected.size == 0 && hasNext)
+//                vecData = opIter.next
+//
+//            if (selection.hasNext) {
+//                val selIdx = selection.next
+//                for (i <- 0 until vecData.cols.size) {
+//                    val tuple = vecData.cols(i).enc match {
+//                        case Dense => (vecData.vecID + selIdx, vecData.cols(i).bytesToValue(vecData.data(i).slice(selIdx * 4, 4)))
+//                        case _ => (vecData.vecID + selIdx, vecData.cols(i).bytesToValue(vecData.data(i).slice(selIdx * vecData.cols(i).size, vecData.cols(i).size)))
+//                    }
+//                    val aggr = aggrs(i)
+//
+//                    if (i == 1)
+//                        aggr.add(tuple._2.asInstanceOf[aggr.T])
+//                }
+//                vecCounter += 1
+//            } else if (opIter.hasNext) {
+//                vecData = opIter.next
+//                selection = vecData.selected.iterator
+//                vecCounter += 0
+//            }
 
             aggrs.map(x => x.get.asInstanceOf[Any])
         }

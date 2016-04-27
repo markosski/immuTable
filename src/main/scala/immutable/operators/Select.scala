@@ -35,7 +35,6 @@ case class SelectRange(col: Column, left: String, right: String, data: DataVecto
     debug(s"Using operator: $toString")
 
     val table = SchemaManager.getTable(col.tblName)
-    SelectionOperator.prepareBuffer(col, table)
 
     def iterator = new SelectIterator()
     val minVal = col.stringToValue(left)
@@ -49,26 +48,29 @@ case class SelectRange(col: Column, left: String, right: String, data: DataVecto
       */
     class SelectIterator extends Iterator[DataVector] {
         val dataIter = data.iterator
-        var dataVecCounter = 0
-        var dataVecColPos: Int = _
+        var dataVecColPos: Int = 0
 
         def next = {
             val dataVec = dataIter.next
+            val dataVecSelected = dataVec.selected.iterator
+            val size = dataVec.data(0).size
+            val selection = BitSet()
 
-            dataVec.cols.zipWithIndex.foreach(x => if (x._1 == col.name) dataVecColPos = x._2)
+            dataVec.cols.zipWithIndex.foreach(x => if (x._1.name == col.name) dataVecColPos = x._2)
 
-            while (dataVecCounter < Config.vectorSize) {
+            while (dataVecSelected.hasNext) {
+                val selected = dataVecSelected.next
                 val value = col.enc match {
-                    case Dict => Conversions.bytesToInt(dataVec.data(dataVecColPos).slice(dataVecCounter * 4, dataVecCounter * 4 + 4))
-                    case _ => col.bytesToValue(dataVec.data(dataVecColPos).slice(dataVecCounter * col.size, dataVecCounter * col.size + col.size))
+                    case Dict => dataVec.data(dataVecColPos)(selected)
+                    case _ => dataVec.data(dataVecColPos)(selected)
                 }
 
                 if (col.ord.gteq(value.asInstanceOf[col.DataType], minVal) && col.ord.lteq(value.asInstanceOf[col.DataType], maxVal)) {
-                    dataVec.selected.add(dataVecCounter)
+                    selection.add(selected)
                 }
-                dataVecCounter += 1
             }
 
+            dataVec.selected = dataVec.selected & selection
             dataVec
         }
 
@@ -80,10 +82,6 @@ case class SelectMatch(col: Column, items: Seq[String], data: DataVectorProducer
     debug(s"Using operator: $toString")
 
     def iterator = new SelectIterator()
-//    SelectionOperator.prepareBuffer(
-//        col,
-//        SchemaManager.getTable(col.tblName)
-//    )
 
     override def toString = s"Select ${items}"
 
@@ -108,29 +106,29 @@ case class SelectMatch(col: Column, items: Seq[String], data: DataVectorProducer
 
             // Branching out depending if we're testing one value or more.
             if (exactVal.size == 1) {
-                while (dataVecCounter < size - 1) {
-                    val value = col.bytesToValue(dataVec.data(dataVecColPos).slice(dataVecCounter * col.size, dataVecCounter * col.size + col.size))
-
-                    if (exactVal.contains(value)) {
-                        selection.add(dataVecCounter)
-                    }
-                    dataVecCounter += 1
-                }
+//                while (dataVecCounter < size - 1) {
+//                    val value = col.bytesToValue(dataVec.data(dataVecColPos).slice(dataVecCounter * col.size, dataVecCounter * col.size + col.size))
+//
+//                    if (exactVal.contains(value)) {
+//                        selection.add(dataVecCounter)
+//                    }
+//                    dataVecCounter += 1
+//                }
 
                 dataVec.selected = dataVec.selected & selection
 
             } else {
-                while (dataVecCounter < size - 1) {
-                    val value = col.enc match {
-                        case Dict => Conversions.bytesToInt(dataVec.data(dataVecColPos).slice(dataVecCounter * 4, dataVecCounter * 4 + 4))
-                        case _ => col.bytesToValue(dataVec.data(dataVecColPos).slice(dataVecCounter * col.size, dataVecCounter * col.size + col.size))
-                    }
+//                while (dataVecCounter < size - 1) {
+//                    val value = col.enc match {
+//                        case Dict => Conversions.bytesToInt(dataVec.data(dataVecColPos).slice(dataVecCounter * 4, dataVecCounter * 4 + 4))
+//                        case _ => col.bytesToValue(dataVec.data(dataVecColPos).slice(dataVecCounter * col.size, dataVecCounter * col.size + col.size))
+//                    }
 
-                    if (exactVal.contains(value.asInstanceOf[col.DataType])) {
-                        selection.add(dataVecCounter)
-                    }
-                    dataVecCounter += 1
-                }
+//                    if (exactVal.contains(value.asInstanceOf[col.DataType])) {
+//                        selection.add(dataVecCounter)
+//                    }
+//                    dataVecCounter += 1
+//                }
 
                 dataVec.selected = dataVec.selected & selection
             }

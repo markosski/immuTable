@@ -14,6 +14,7 @@ import java.util.Date
 
 object Main extends App {
     def small = {
+//        val table = SchemaManager.getTable("immutable2_100mil")
         val table = SchemaManager.getTable("correla_dataset_small_new")
 
         info("start --")
@@ -22,43 +23,37 @@ object Main extends App {
             table.column("fname").asInstanceOf[VarCharColumn],
             table.column("age").asInstanceOf[TinyIntColumn],
             table.column("state").asInstanceOf[FixedCharColumn]
+//            table.column("score1").asInstanceOf[TinyIntColumn]
         ))
 
-        val res = SelectMatch(table.column("fname").asInstanceOf[VarCharColumn], List("Bristol", "Cephus", "Jennie"), data)
-        val res1 = FetchSelectRange(table.column("age").asInstanceOf[TinyIntColumn], "18", "25", res)
-        val res2 = FetchSelectMatch(table.column("state").asInstanceOf[FixedCharColumn], List("CT", "NY", "NJ", "OH"), res1)
+        val res = SelectRange(table.column("age").asInstanceOf[TinyIntColumn], "40", "75", data)
+//        val res1 = FetchSelectRange(table.column("score1").asInstanceOf[TinyIntColumn], "50", "100", res)
+        val res2 = FetchSelectMatch(table.column("state").asInstanceOf[FixedCharColumn], List("CT", "NY", "NJ", "OH"), res)
+        val res3 = FetchSelectMatch(table.column("fname").asInstanceOf[VarCharColumn], List("Bristol", "Cephus", "Jennie"), res2)
 
 //        val colIter = table.column[TinyIntColumn]("age").getIterator
 //        val dataVec = colIter.next
 //        print(colIter.next)
 
-        val iter = res2.iterator
+//        val iter = res2.iterator
 //        val oids = iter.next
 //        while (oids.hasRemaining) {
 //            print(oids.get)
 //            print(", ")
 //        }
 //        for (i <- 0 until 10) {
-        while (iter.hasNext) {
-            val vec = iter.next
-            if (vec.selected.size > 0 ) {
-                print("")
-            }
-        }
-//        iter.next
+//        while (iter.hasNext) {
+//            val vec = iter.next
+//            if (vec.selected.size > 0 ) {
+//                print("")
+//            }
+//        }
 
-//        val result = Project(List(), res1)
-
-
-
-//        Intermediate(table.getColumn[TinyIntColumn]("age"), table).encode(res)
-//        Intermediate(table.getColumn[FixedCharColumn]("state"), table).encode(inter)
-
-//        val result = Project(List(
-//            table.getColumn[VarCharColumn]("fname"),
-//            table.getColumn[FixedCharColumn]("state"),
-//            table.getColumn[TinyIntColumn]("age")
-//        ), res1)
+        val result = Project(List(
+            table.column("fname").asInstanceOf[VarCharColumn],
+            table.column("state").asInstanceOf[FixedCharColumn],
+            table.column("age").asInstanceOf[TinyIntColumn]
+        ), res3)
 //
 //        val result = ProjectAggregate(
 //            List(),
@@ -76,17 +71,24 @@ object Main extends App {
 //                Max(table.column[TinyIntColumn]("age"))
 //            ), res1, Some(table.column[VarCharColumn]("fname")))
 
-//        result.take(200).foreach(x => println(x))
+//        result.take(10).foreach(x => println(x))
 
+        result.foreach(x => x)
+
+//        val resIter = result.iterator
+//        println(resIter.next)
+//        println(resIter.next)
+//        println(resIter.next)
+//        println(resIter.next)
         info("end --")
 
     }
 
     def big = {
 //        val table = SchemaManager.getTable("immutable2_100mil")
-//
+////
 //        info("start --")
-//        val res = SelectMatch(table.column[FixedCharColumn]("state"), List("CT", "NY", "NJ", "TX"))
+//        val res = SelectMatch(table.column("state").asInstanceOf[FixedCharColumn], List("CT", "NY", "NJ", "TX"))
 //        val res1 = FetchSelectRange(table.column[TinyIntColumn]("age"), "18", "55", res)
 //        val res2 = FetchSelectMatch(table.column[FixedCharColumn]("state"), List("CT"), res1)
 
@@ -102,7 +104,7 @@ object Main extends App {
 //                Avg(table.column[TinyIntColumn]("age"))
 //            ), res1)
 //
-//        result.take(1000).foreach(x => println(x))
+//        result.take(10).foreach(x => println(x))
         info("end --")
     }
 

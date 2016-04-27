@@ -21,7 +21,7 @@ case object RLE extends Encoder {
     def iterator(col: Column) = new RLEIterator(col)
     def loader(col: Column) = new RLELoader(col)
 
-    class RLEIterator(col: Column, seek: Int=0) extends SeekableIterator[Array[Byte]] {
+    class RLEIterator(val col: Column, seek: Int=0) extends SeekableIterator[Vector[_]] {
         val table = SchemaManager.getTable(col.tblName)
         val rlnFile = BufferManager.get(col.name)
         val byteOffset = (col.size + repeatValueSize) * pageSize
@@ -49,7 +49,8 @@ case object RLE extends Encoder {
 //            if (delta == 0) rlnFile.get(bytes)
 //
 //            (counter - 1, col.bytesToValue(bytes.slice(0, col.size)))
-            bytes
+            Vector[col.DataType]()
+//            bytes
         }
 
         def hasNext = {
