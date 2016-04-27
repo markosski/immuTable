@@ -13,8 +13,8 @@ import scala.util.{Try, Failure, Success}
   * Created by marcin on 2/26/16.
   *
   */
-trait SelectionOperator extends Iterable[IntBuffer] {
-    def iterator: Iterator[IntBuffer]
+trait SelectionOperator extends Iterable[Int] {
+    def iterator: Iterator[Int]
 }
 
 trait ProjectionOperator extends Iterable[Seq[_]] {

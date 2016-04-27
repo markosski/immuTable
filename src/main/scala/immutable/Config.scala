@@ -14,6 +14,6 @@ object Config {
     }
 
     object Descriptors {
-        val enable = true
+        val enable = false
     }
 }

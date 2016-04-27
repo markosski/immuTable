@@ -43,8 +43,7 @@ case class SelectRange(col: Column, left: String, right: String) extends Selecti
       * On each call return a vector of size Config.vectorSize.
       * Caller is responsible to exhaust the vector and call next() again on iterator.
       */
-    class SelectIterator extends Iterator[IntBuffer] {
-        val result = IntBuffer.allocate(Config.vectorSize)
+    class SelectIterator extends Iterator[Int] {
         val encIter = col.getIterator
         val descriptor: Option[Vector[_]] = col.enc match {
             case x: EncoderDescriptor => {
@@ -81,20 +80,17 @@ case class SelectRange(col: Column, left: String, right: String) extends Selecti
         }
 
         def next = {
-            result.clear
+            var success = false
+            var oid: Int = 0
 
-            while(encIter.hasNext && result.hasRemaining) {
-                if (Config.Descriptors.enable && encIter.position % Config.bulkLoad.vectorSize == 0)
-                    checkDescriptor
-
+            while (!success) {
                 val tuple = encIter.next
                 if (col.ord.gteq(tuple._2.asInstanceOf[col.DataType], minVal) && col.ord.lteq(tuple._2.asInstanceOf[col.DataType], maxVal)) {
-                    result.put(tuple._1)
+                    oid = tuple._1
+                    success = true
                 }
             }
-
-            result.flip
-            result
+            oid
         }
 
         def hasNext = if (encIter.hasNext) true else false
@@ -113,7 +109,7 @@ case class SelectMatch(col: Column, items: Seq[String]) extends SelectionOperato
 
     override def toString = s"Select ${items}"
 
-    class SelectIterator extends Iterator[IntBuffer] {
+    class SelectIterator extends Iterator[Int] {
         val encIter = col.getIterator
 
         // TODO: If value does not exist in dict lookup return empty iterator
@@ -160,32 +156,37 @@ case class SelectMatch(col: Column, items: Seq[String]) extends SelectionOperato
         }
 
         def next = {
-            val result = IntBuffer.allocate(Config.vectorSize)
+            var oid: Int = 0
+            var success = false
 
             // Branching out depending if we're testing one value or more.
             // Would like to find out if compile figure it out and .contains() should be used instead.
             if (exactVal.size == 1) {
-                while(encIter.hasNext && result.hasRemaining) {
+                while(!success) {
                     if (Config.Descriptors.enable && encIter.position % Config.bulkLoad.vectorSize == 0)
                         checkDescriptor
 
                     val tuple = encIter.next
-                    if (exactVal(0) == tuple._2)
-                        result.put(tuple._1)
+
+                    if (exactVal(0) == tuple._2) {
+                        oid = tuple._1
+                        success = true
+                    }
                 }
             } else {
-                while(encIter.hasNext && result.hasRemaining) {
+                while(!success) {
                     if (Config.Descriptors.enable && encIter.position % Config.bulkLoad.vectorSize == 0)
                         checkDescriptor
 
                     val tuple = encIter.next
-                    if (exactVal.contains(tuple._2))
-                        result.put(tuple._1)
+
+                    if (exactVal.contains(tuple._2)) {
+                        oid = tuple._1
+                        success = true
+                    }
                 }
             }
-
-            result.flip
-            result
+            oid
         }
 
         def hasNext = if (encIter.hasNext) true else false

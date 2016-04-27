@@ -27,10 +27,6 @@ case class Project(cols: List[Column], op: SelectionOperator, limit: Option[Int]
     override def toString = s"Project ${cols}, ${op}, ${limit}"
 
     class ProjectIterator extends Iterator[Seq[Any]] {
-        var oids = IntBuffer.allocate(Config.vectorSize)
-        if (opIter.hasNext)
-            oids = opIter.next
-
         // TODO: Prevent from lookups to the same column if specified more than once.
         val encIters = cols.map(x => {
             SelectionOperator.prepareBuffer(
@@ -41,18 +37,17 @@ case class Project(cols: List[Column], op: SelectionOperator, limit: Option[Int]
         })
 
         def next = {
-            if (!oids.hasRemaining && opIter.hasNext)
-                oids = opIter.next
+            var oid = opIter.next
 
-            val oid = oids.get
-
-            encIters.map(x => {
+            val row = encIters.map(x => {
                 x.seek(oid)
                 x.next._2
             })
+
+            row
         }
 
-        def hasNext = if (oids.hasRemaining || opIter.hasNext) true else false
+        def hasNext = if (opIter.hasNext) true else false
     }
 }
 
@@ -67,9 +62,6 @@ case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator]
 
     class ProjectAggregateIterator extends Iterator[Seq[Any]] {
         val opIter = op.iterator
-        var oids = IntBuffer.allocate(Config.vectorSize)
-        if (opIter.hasNext)
-            oids = opIter.next
 
         val encIters = aggrs.map(x => {
             SelectionOperator.prepareBuffer(x.col, SchemaManager.getTable(x.col.tblName))
@@ -77,27 +69,27 @@ case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator]
         })
 
         def next = {
-            while (oids.hasRemaining) {
-                val oid = oids.get
-
-                if (!oids.hasRemaining && opIter.hasNext)
-                    oids = opIter.next
-
-                for (i <- 0 until aggrs.size) {
-                    encIters(i).seek(oid)
-                    val tuple = encIters(i).next
-                    val aggr = aggrs(i)
-
-                    aggr.add(tuple._2.asInstanceOf[aggr.T])
-                }
-
-                if (!oids.hasRemaining) oids = opIter.next
-            }
+//            while (oids.hasRemaining) {
+//                val oid = oids.get
+//
+//                if (!oids.hasRemaining && opIter.hasNext)
+//                    oids = opIter.next
+//
+//                for (i <- 0 until aggrs.size) {
+//                    encIters(i).seek(oid)
+//                    val tuple = encIters(i).next
+//                    val aggr = aggrs(i)
+//
+//                    aggr.add(tuple._2.asInstanceOf[aggr.T])
+//                }
+//
+//                if (!oids.hasRemaining) oids = opIter.next
+//            }
 
             aggrs.map(x => x.get.asInstanceOf[Any])
         }
 
-        def hasNext = if (oids.hasRemaining) true else false
+        def hasNext = false
     }
 
     class ProjectAggregateGroupByIterator extends Iterator[Seq[Any]] {
@@ -108,8 +100,8 @@ case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator]
         val opIter = op.iterator
         val groupMap = mutable.HashMap[col.DataType, List[Int]]()
         var oids = IntBuffer.allocate(Config.vectorSize)
-        if (op.iterator.hasNext)
-            oids = opIter.next
+//        if (op.iterator.hasNext)
+//            oids = opIter.next
 
         val encIters = aggrs.map(x => {
             SelectionOperator.prepareBuffer(x.col, SchemaManager.getTable(x.col.tblName))
@@ -127,8 +119,8 @@ case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator]
                 groupMap.put(tuple._2, List(tuple._1))
             }
 
-            if (!oids.hasRemaining && opIter.hasNext)
-                oids = opIter.next
+//            if (!oids.hasRemaining && opIter.hasNext)
+//                oids = opIter.next
         }
 
         val mapIter = groupMap.iterator

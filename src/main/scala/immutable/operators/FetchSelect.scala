@@ -30,36 +30,28 @@ case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperat
         case _ => items.map(x => col.stringToValue(x))
     }
 
-    class FetchSelectIterator extends Iterator[IntBuffer] {
+    class FetchSelectIterator extends Iterator[Int] {
         val encIter = col.getIterator
         val opIter = op.iterator
-        var oids = IntBuffer.allocate(Config.vectorSize)
-        if (opIter.hasNext)
-            oids = opIter.next
 
         def next = {
-            val result = IntBuffer.allocate(Config.vectorSize)
+            var oid: Int = 0
+            var success = false
 
-            while (result.hasRemaining && encIter.hasNext) {
-                if (!oids.hasRemaining && opIter.hasNext)
-                    oids = opIter.next
+            while (!success && opIter.hasNext) {
+                val opOid = opIter.next
+                encIter.seek(opOid)
+                val tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
 
-                if (oids.hasRemaining) {
-                    encIter.seek(oids.get)
-                    val tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
-
-                    if (exactVal.contains(tuple._2))
-                        result.put(tuple._1)
-                } else {
-                    result.limit(result.position)
+                if (exactVal.contains(tuple._2)) {
+                    oid = tuple._1
+                    success = true
                 }
             }
-
-            result.flip
-            result
+            oid
         }
 
-        def hasNext = if (oids.hasRemaining || opIter.hasNext) true else false
+        def hasNext = if (opIter.hasNext) true else false
     }
 
 }
@@ -76,39 +68,31 @@ case class FetchSelectRange(col: Column, left: String, right: String, op: Select
 
     def iterator = new FetchSelectRangeIterator()
 
-    class FetchSelectRangeIterator extends Iterator[IntBuffer] {
+    class FetchSelectRangeIterator extends Iterator[Int] {
         val minVal = col.stringToValue(left)
         val maxVal = col.stringToValue(right)
 
         val encIter = col.getIterator
         val opIter = op.iterator
-        var oids = IntBuffer.allocate(Config.vectorSize)
-        if (opIter.hasNext)
-            oids = opIter.next
 
         def next = {
-            val result = IntBuffer.allocate(Config.vectorSize)
+            var oid: Int = 0
+            var success = false
 
-            while (result.hasRemaining && encIter.hasNext) {
-                if (!oids.hasRemaining && opIter.hasNext)
-                    oids = opIter.next
+            while (!success && opIter.hasNext) {
+                val opOid = opIter.next
+                encIter.seek(opOid)
+                val tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
 
-                if (oids.hasRemaining) {
-                    encIter.seek(oids.get)
-                    val tuple = encIter.next.asInstanceOf[(Int, col.DataType)]
-
-                    if (col.ord.gteq(tuple._2, minVal) && col.ord.lteq(tuple._2, maxVal)) {
-                        result.put(tuple._1)
-                    }
-                } else {
-                    result.limit(result.position)
+                if (col.ord.gteq(tuple._2, minVal) && col.ord.lteq(tuple._2, maxVal)) {
+                    oid = tuple._1
+                    success = true
                 }
             }
-            result.flip
-            result
+            oid
         }
 
-        def hasNext = if (oids.hasRemaining || opIter.hasNext) true else false
+        def hasNext = if (opIter.hasNext) true else false
     }
 }
 
