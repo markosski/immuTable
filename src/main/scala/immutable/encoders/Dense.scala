@@ -22,7 +22,7 @@ case object Dense extends Encoder {
         case _ => throw new Exception("Unsupported column type for this encoder.")
     }
 
-    def iterator(col: Column): SeekableIterator[Vector[_]] = col match {
+    def iterator(col: Column): SeekableIterator[_] = col match {
         case col: NumericColumn => new FixedCharNumericIterator(col)
         case col: FixedCharColumn => new FixedCharNumericIterator(col)
         case _ => throw new Exception("Unsupported column type for this iterator.")
@@ -33,7 +33,7 @@ case object Dense extends Encoder {
             new FileOutputStream(s"${Config.home}/${col.tblName}/${col.name}.dense", false),
             Config.readBufferSize)
 
-        def load(data: Vector[String]): Unit = {
+        def write(data: Vector[String]): Unit = {
             var i = 0
             while (i < data.size) {
                 val field_val = data(i) match {
@@ -45,40 +45,35 @@ case object Dense extends Encoder {
                 i += 1
             }
         }
-        def finish = {
+        def close = {
             colFile.flush
             colFile.close
         }
     }
 
-    class FixedCharNumericIterator(val col: Column, seek: Int=0) extends SeekableIterator[Vector[_]] {
+    class FixedCharNumericIterator(val col: Column) extends SeekableIterator[Any] {
         val table = SchemaManager.getTable(col.tblName)
-        val file = BufferManager.get(col.FQN)
+        val file = ColumnBufferManager.get(col.FQN)
 
         var counter = 0
 
         def next = {
+            counter += 1
             val bytes = new Array[Byte](col.size)
-            var vec = Vector[col.DataType]()
-
-            val vecSize = if (file.remaining > Config.vectorSize * col.size) Config.vectorSize else (file.remaining / col.size)
-
-            for (i <- 0 until vecSize) {
-                file.get(bytes)
-                vec = vec :+ col.bytesToValue(bytes)
-                counter += file.position / col.size
-            }
-            vec
+            file.get(bytes)
+            col.bytesToValue(bytes)
         }
 
         def hasNext = {
-            if (counter < file.limit / col.size) true else false
+            if (counter < table.size) true else false
         }
 
         def seek(loc: Int) = {
             file.position(loc * col.size)
             counter = loc
         }
+
+        def position = counter
     }
 }
 

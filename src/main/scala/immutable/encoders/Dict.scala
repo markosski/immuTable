@@ -44,32 +44,25 @@ case object Dict extends Encoder {
 
                 bytes = new Array[Byte](itemSize(0))
             }
-            info(s"Finished creating lookup for ${col.name}")
+            info(s"Finished creating lookup for ${col.name} with ${lookup.size} entries.")
             lookups.put(col.FQN, lookup)
             dictValFile.close
             lookup
         }
     }
 
-    class DictIterator(val col: Column, seek: Int=0) extends SeekableIterator[Vector[_]] {
+    class DictIterator(val col: Column) extends SeekableIterator[Int] {
         val table = SchemaManager.getTable(col.tblName)
-        val file = BufferManager.get(col.FQN)
+        val file = ColumnBufferManager.get(col.FQN)
         val valSize = 4
 
         var counter = 0
 
         def next = {
+            counter += 1
             val bytes = new Array[Byte](valSize)
-            var vec = Vector[Int]()
-
-            val vecSize = if (file.remaining > Config.vectorSize * valSize) Config.vectorSize else (file.remaining / valSize)
-
-            for (i <- 0 until vecSize) {
-                file.get(bytes)
-                vec = vec :+ Conversions.bytesToInt(bytes)
-                counter += file.position / valSize
-            }
-            vec
+            file.get(bytes)
+            Conversions.bytesToInt(bytes)
         }
 
         def hasNext = {
@@ -80,6 +73,8 @@ case object Dict extends Encoder {
             file.position(loc * valSize)
             counter = loc
         }
+
+        def position = counter
     }
 
     case class DictLoader(col: Column) extends Loader {
@@ -94,7 +89,7 @@ case object Dict extends Encoder {
         val offsetLookup = mutable.HashMap[col.DataType, Int]()
         var bytesWritten: Int = 0
 
-        def load(data: Vector[String]) = {
+        def write(data: Vector[String]) = {
             var OID: Int = 0
 
             var i: Int = 0
@@ -122,7 +117,7 @@ case object Dict extends Encoder {
             }
         }
 
-        def finish = {
+        def close = {
             bofFile.flush
             bofFile.close
             varFile.flush

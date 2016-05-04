@@ -40,11 +40,20 @@ object SelectionOperator {
             }
         }
 
-        Try(BufferManager.get(col.FQN)) match {
+        Try(ColumnBufferManager.get(col.FQN)) match {
             case Success(x) => info(s"Buffer ${col.FQN} already registered.")
             case Failure(e) => {
-                info(s"Registering new buffer: ${col.FQN}")
-                BufferManager.registerFromFile(col.FQN, s"${Config.home}/${table.name}/${col.name}.${ext}", col.size, Some(1))
+                col.enc match {
+                    case Dense => {
+                        info(s"Registering new Memory buffer: ${col.FQN}")
+                        ColumnBufferManager.registerMemory(col.FQN, s"${Config.home}/${table.name}/${col.name}.${ext}", col.size, Some(1))
+                    }
+                    case _ => {
+                        info(s"Registering new Mmap buffer: ${col.FQN}")
+                        ColumnBufferManager.registerMmap(col.FQN, s"${Config.home}/${table.name}/${col.name}.${ext}", col.size, Some(1))
+                    }
+                }
+
             }
         }
     }

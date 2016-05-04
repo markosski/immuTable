@@ -6,7 +6,6 @@ import immutable.LoggerHelper._
 /**
  * http://ktoso.github.io/scala-types-of-types/
  */
-
 trait NumericColumn extends Column {
     type DataType
     implicit val num: Numeric[DataType]
@@ -21,7 +20,6 @@ trait CharColumn extends Column {
 
 trait Column extends {
     type DataType
-    type AltDataType
     implicit val ord: Ordering[DataType]
 
     val name: String
@@ -41,7 +39,6 @@ trait Column extends {
 
 case class FixedCharColumn(name: String, tblName: String, size: Int, enc: Encoder) extends CharColumn {
     type DataType = String
-    type AltDataType = Int
     val ord = implicitly[Ordering[DataType]]
     val nullVal = "\0"
 
@@ -60,7 +57,6 @@ case class FixedCharColumn(name: String, tblName: String, size: Int, enc: Encode
 
 case class VarCharColumn(name: String, tblName: String, size: Int, enc: Encoder) extends CharColumn {
     type DataType = String
-    type AltDataType = Int
     val ord = implicitly[Ordering[DataType]]
     val nullVal = "\0"
 
@@ -80,7 +76,6 @@ case class VarCharColumn(name: String, tblName: String, size: Int, enc: Encoder)
 
 case class TinyIntColumn(name: String, tblName: String, enc: Encoder) extends NumericColumn {
     type DataType = Byte
-    type AltDataType = DataType
     val ord = implicitly[Ordering[DataType]]
     val num = implicitly[Numeric[DataType]]
 
@@ -104,7 +99,6 @@ case class TinyIntColumn(name: String, tblName: String, enc: Encoder) extends Nu
 
 case class ShortIntColumn(name: String, tblName: String, enc: Encoder) extends NumericColumn {
     type DataType = Short
-    type AltDataType = DataType
     val ord = implicitly[Ordering[DataType]]
     val num = implicitly[Numeric[DataType]]
 
@@ -129,7 +123,6 @@ case class ShortIntColumn(name: String, tblName: String, enc: Encoder) extends N
 
 case class IntColumn(name: String, tblName: String, enc: Encoder) extends NumericColumn {
     type DataType = Int
-    type AltDataType = DataType
     val ord = implicitly[Ordering[DataType]]
     val num = implicitly[Numeric[DataType]]
 
@@ -154,7 +147,6 @@ case class IntColumn(name: String, tblName: String, enc: Encoder) extends Numeri
 
 case class BigIntColumn(name: String, tblName: String, enc: Encoder) extends NumericColumn {
     type DataType = Long
-    type AltDataType = DataType
     val ord = implicitly[Ordering[DataType]]
     val num = implicitly[Numeric[DataType]]
 
@@ -182,7 +174,6 @@ case class DecimalColumn(name: String, tblName: String, enc: Encoder) extends Nu
      * http://stackoverflow.com/questions/9810010/scala-library-to-convert-numbers-int-long-double-to-from-arraybyte
      */
     type DataType = Double
-    type AltDataType = DataType
     val ord = implicitly[Ordering[DataType]]
     val num = implicitly[Numeric[DataType]]
 

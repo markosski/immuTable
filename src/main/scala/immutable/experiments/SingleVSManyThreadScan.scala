@@ -5,7 +5,7 @@ import java.nio.{MappedByteBuffer, ByteBuffer}
 import java.nio.channels.FileChannel
 import java.util.Date
 
-import immutable.BufferManager
+import immutable.ColumnBufferManager
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -233,10 +233,10 @@ object SingleVSManyThreadScan extends App {
 
     def readWithBufferManager(tableName: String, columnName: String) = {
         val futures = mutable.MutableList[Future[ByteBuffer]]()
-        BufferManager.registerFromFile(columnName, s"/Users/marcin/correla/$tableName/$columnName.col", 4)
+        ColumnBufferManager.registerMmap(columnName, s"/Users/marcin/correla/$tableName/$columnName.col", 4)
 
         def run = {
-            def stage(mmap: MappedByteBuffer) = {
+            def stage(mmap: ByteBuffer) = {
 //                val stageResult = ArrayBuffer[Int]()
                 val stageResult = ByteBuffer.allocate(100000000)
                 val chunk = new Array[Byte](1)
@@ -261,7 +261,7 @@ object SingleVSManyThreadScan extends App {
             }
 
             val start = new Date().getTime()
-            for (mmap <- BufferManager.getAll(columnName)) futures += Future(stage(mmap))
+            for (mmap <- ColumnBufferManager.getAll(columnName)) futures += Future(stage(mmap))
             val futRes = Future.sequence(futures)
             Await.ready(futRes, Duration.Inf)
 //            stage(bf.get(columnName)(0))

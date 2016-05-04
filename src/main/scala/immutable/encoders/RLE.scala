@@ -21,9 +21,9 @@ case object RLE extends Encoder {
     def iterator(col: Column) = new RLEIterator(col)
     def loader(col: Column) = new RLELoader(col)
 
-    class RLEIterator(val col: Column, seek: Int=0) extends SeekableIterator[Vector[_]] {
+    class RLEIterator(val col: Column) extends SeekableIterator[Any] {
         val table = SchemaManager.getTable(col.tblName)
-        val rlnFile = BufferManager.get(col.name)
+        val rlnFile = ColumnBufferManager.get(col.name)
         val byteOffset = (col.size + repeatValueSize) * pageSize
 
         val bytes: Array[Byte] = new Array[Byte](col.size + repeatValueSize) // column size + 2 byte for repeat value
@@ -49,8 +49,8 @@ case object RLE extends Encoder {
 //            if (delta == 0) rlnFile.get(bytes)
 //
 //            (counter - 1, col.bytesToValue(bytes.slice(0, col.size)))
-            Vector[col.DataType]()
 //            bytes
+            col.bytesToValue(new Array[Byte](0))
         }
 
         def hasNext = {
@@ -61,6 +61,8 @@ case object RLE extends Encoder {
             counter = loc / pageSize * pageSize
             delta = loc - (loc / pageSize) * pageSize
         }
+
+        def position = 0
     }
 
     class RLELoader(col: Column) extends Loader {
@@ -68,7 +70,7 @@ case object RLE extends Encoder {
             new FileOutputStream(s"${Config.home}/${col.tblName}/${col.name}.rle", false),
             Config.readBufferSize)
 
-        def load(data: Vector[String]) = {
+        def write(data: Vector[String]) = {
             var repeat: Int = 0
             var lastValue = data(0) match {
                 case "null" => col.nullVal.toString
@@ -96,7 +98,7 @@ case object RLE extends Encoder {
             }
         }
 
-        def finish = {
+        def close = {
             colFile.flush
             colFile.close
         }

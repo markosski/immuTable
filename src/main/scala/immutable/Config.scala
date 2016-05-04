@@ -8,4 +8,12 @@ object Config {
     val readBufferSize = 4096
     val loggerLevel = 'DEBUG
     val vectorSize = 512
+
+    object bulkLoad {
+        val vectorSize = 8192
+    }
+
+    object Descriptors {
+        val enable = false
+    }
 }

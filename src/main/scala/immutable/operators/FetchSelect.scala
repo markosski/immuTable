@@ -14,6 +14,8 @@ import scala.collection.mutable.BitSet
 
 case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperator) extends SelectionOperator {
     debug(s"Using operator: $toString")
+    val table = SchemaManager.getTable(col.tblName)
+    SelectionOperator.prepareBuffer(col, table)
 
     override def toString = s"FetchSelect ${col.name} ${items}"
 
@@ -34,31 +36,36 @@ case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperat
     }
 
     class FetchSelectIterator extends Iterator[DataVector] {
+        val encIter = col.getIterator
         val opIter = op.iterator
-        var dataVecColPos: Int = 0
-        var dataVec = opIter.next
-        var dataVecSelected = dataVec.selected.iterator
-
-        dataVec.cols.zipWithIndex.foreach(x => if (x._1.name == col.name) dataVecColPos = x._2)
 
         def next = {
-            while (!dataVecSelected.hasNext && hasNext) {
-                dataVec = opIter.next
-                dataVecSelected = dataVec.selected.iterator
-            }
-
+            var dataVec = opIter.next
+            val dataVecSelected = dataVec.selected.iterator
             val selection = BitSet()
+            // Create a colVec of size the same as first vector in DataVector
+            val colVec = new Array[Any](dataVec.data(0).size)
 
             while (dataVecSelected.hasNext) {
-                val selected = dataVecSelected.next
-                val value = dataVec.data(dataVecColPos)(selected)
+                val localIdx = dataVecSelected.next
+                encIter.seek(dataVec.vecID - colVec.size + localIdx)
+
+                val value = col.enc match {
+                    case Dict => encIter.next.asInstanceOf[Int]
+                    case _ => encIter.next
+                }
 
                 if (exactVal.contains(value)) {
-                    selection.add(selected)
+                    selection.add(localIdx)
+                    colVec(localIdx) = value
                 }
             }
 
-            dataVec.selected = dataVec.selected & selection
+            dataVec = dataVec.copy(
+                cols=dataVec.cols :+ col,
+                data=dataVec.data :+ colVec,
+                selected=dataVec.selected & selection)
+
             dataVec
         }
 
@@ -68,6 +75,8 @@ case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperat
 
 case class FetchSelectRange(col: Column, left: String, right: String, op: SelectionOperator) extends SelectionOperator {
     info(s"Using operator: $toString")
+    val table = SchemaManager.getTable(col.tblName)
+    SelectionOperator.prepareBuffer(col, table)
 
     override def toString = s"FetchSelect ${col.name} ${left}/${right}"
 
@@ -78,31 +87,29 @@ case class FetchSelectRange(col: Column, left: String, right: String, op: Select
         val maxVal = col.stringToValue(right)
 
         val opIter = op.iterator
-        var dataVec = opIter.next  // get a data vector of Config.vectorSize
-        var dataVecColPos: Int = 0
-        var dataVecSelected = dataVec.selected.iterator
+        val encIter = col.getIterator
 
         def next = {
-            while (!dataVecSelected.hasNext && hasNext) {
-                dataVec = opIter.next
-                dataVecSelected = dataVec.selected.iterator
-            }
-
+            var dataVec = opIter.next  // get a data vector of Config.vectorSize
+            val dataVecSelected = dataVec.selected.iterator
             val selection = BitSet()
-            val size = dataVec.data(0).size
-
-            dataVec.cols.zipWithIndex.foreach(x => if (x._1.name == col.name) dataVecColPos = x._2)
+            val colVec = new Array[Any](dataVec.data(0).size)
 
             while (dataVecSelected.hasNext) {
-                val selected = dataVecSelected.next
-                val value = dataVec.data(dataVecColPos)(selected)
+                val localIdx = dataVecSelected.next
+                encIter.seek(dataVec.vecID - colVec.size + localIdx)
+                val value = encIter.next.asInstanceOf[col.DataType]
 
-                if (col.ord.gteq(value.asInstanceOf[col.DataType], minVal) && col.ord.lteq(value.asInstanceOf[col.DataType], maxVal)) {
-                    selection.add(selected)
+                if (col.ord.gteq(value, minVal) && col.ord.lteq(value, maxVal)) {
+                    selection.add(localIdx)
+                    colVec(localIdx) = value
                 }
             }
 
-            dataVec.selected = dataVec.selected & selection
+            dataVec = dataVec.copy(
+                cols=dataVec.cols :+ col,
+                data=dataVec.data :+ colVec,
+                selected=dataVec.selected & selection)
             dataVec
         }
 

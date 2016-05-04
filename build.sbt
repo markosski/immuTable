@@ -23,3 +23,17 @@ libraryDependencies += "org.scala-lang" % "scala-reflect" % "2.11.7"
 javaOptions += "-Xms512m"
 
 javaOptions += "-Xmx2g"
+
+enablePlugins(JavaAppPackaging)
+
+packageDescription in Debian := "immuTable"
+
+maintainer in Debian := "Marcin Kossakowski <marcin.kossakowski@gmail.com>"
+
+fork in run := true
+
+connectInput in run := true // to wait for user input
+
+mainClass in assembly := Some("immutable.Main")
+
+mainClass in (Compile) := Some("immutable.Main")

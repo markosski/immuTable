@@ -11,9 +11,38 @@ import scala.util.{Failure, Success, Try}
  * Created by marcin on 11/22/15.
  *
  */
+
+abstract class ColumnBuffer {
+    def position: Int
+    def position(pos: Int): Unit
+    def get: Byte
+    def get(arr: Array[Byte]): Unit
+    def hasRemaining: Boolean
+}
+
+class MMapColumnBuffer(buffer: ByteBuffer) extends ColumnBuffer {
+    def position = buffer.position
+    def position(pos: Int) = buffer.position(pos)
+    def get = buffer.get
+    def get(arr: Array[Byte]) = buffer.get(arr)
+    def hasRemaining = buffer.hasRemaining
+}
+
+class MemoryColumnBuffer(buffer: ByteBuffer) extends ColumnBuffer {
+    def position = buffer.position
+    def position(pos: Int) = buffer.position(pos)
+    def get = buffer.get
+    def get(arr: Array[Byte]) = buffer.get(arr)
+    def hasRemaining = buffer.hasRemaining
+}
+
+//class MemoryColumnBuffer extends ColumnBuffer {
+//
+//}
+
 // TODO: Instead of buffer name should we take column ref. or it is better to keep buffer dumb
-object BufferManager {
-    val mbuffers: mutable.Map[String, Seq[MappedByteBuffer]] = mutable.Map()
+object ColumnBufferManager {
+    val mbuffers: mutable.Map[String, Seq[ByteBuffer]] = mutable.Map()
 
     /**
      *
@@ -22,7 +51,7 @@ object BufferManager {
      * @param dataSize Byte size of data unit
      * @param parts Divide into even parts (or close to even) to use when processing by many threads
      */
-    def registerFromFile(name: String, filePath: String, dataSize: Int, parts: Option[Int] = Some(1)): Unit = {
+    def registerMmap(name: String, filePath: String, dataSize: Int, parts: Option[Int] = Some(1)): Unit = {
         val threads: Int = parts match {
             case Some(parts) => parts
             case None => Runtime.getRuntime.availableProcessors
@@ -45,13 +74,22 @@ object BufferManager {
         file.close()
     }
 
+    def registerMemory(name: String, filePath: String, dataSize: Int, parts: Option[Int] = Some(1)): Unit = {
+        val file = new RandomAccessFile(filePath, "r")
+        val chan = file.getChannel
+        val buffer = ByteBuffer.allocate(chan.size.toInt)
+        chan.read(buffer)
+        buffer.flip()
+        mbuffers += (name -> List(buffer))
+    }
+
     /**
      * Get the buffer sequence.
       *
       * @param name Name of buffer
      * @return
      */
-    def getAll(name: String): Seq[MappedByteBuffer] = mbuffers(name)
+    def getAll(name: String): Seq[ByteBuffer] = mbuffers(name)
 
     /**
      * Get buffer by index. By default buffer at index 0.
@@ -61,7 +99,7 @@ object BufferManager {
      */
     def get(name: String, index: Int = 0): ByteBuffer = {
         Try(mbuffers(name)(index)) match {
-            case Success(x) => x.duplicate();
+            case Success(x) => x.duplicate;
             case Failure(e) => throw new Exception(s"Buffer ${name} was not found.")
         }
     }
