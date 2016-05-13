@@ -99,7 +99,7 @@ object Main extends App {
             List(
                 Count(table.column[TinyIntColumn]("age")),
                 Avg(table.column[TinyIntColumn]("age"))
-            ), res1, Some(table.column[VarCharColumn]("state")))
+            ), res2, Some(table.column[VarCharColumn]("state")))
 
         result.foreach(x => println(x))
         info("end --")
