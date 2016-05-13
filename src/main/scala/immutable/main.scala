@@ -22,8 +22,8 @@ object Main extends App {
 
         val res = SelectRange(table.column[TinyIntColumn]("age"), "35", "75")
         val res1 = FetchSelectRange(table.column[TinyIntColumn]("score1"), "70", "100", res)
-//        val res2 = FetchSelectRange(table.column[TinyIntColumn]("score2"), "70", "100", res1)
-        val res3 = FetchSelectMatch(table.column[VarCharColumn]("fname"), List("Marcin", "Cephus", "Jennie"), res1)
+        val res2 = FetchSelectRange(table.column[TinyIntColumn]("score2"), "70", "100", res1)
+//        val res3 = FetchSelectMatch(table.column[VarCharColumn]("fname"), List("Marcin", "Cephus", "Jennie"), res1)
 
 //        val res = SelectMatch(table.column[VarCharColumn]("fname"), List("Marcin", "Cephus", "Jennie"))
 //        val res1 = FetchSelectMatch(table.column[FixedCharColumn]("state"), List("CT", "NY", "NJ", "VA"), res)
@@ -36,12 +36,12 @@ object Main extends App {
 //        resIter foreach(x => Unit)
 //        println(s"skipped times... ${resIter.descriptorSkipped}")
 
-        val result = Project(List(
-            table.column[VarCharColumn]("fname"),
-            table.column[TinyIntColumn]("score1"),
-//            table.column[TinyIntColumn]("score2"),
-            table.column[TinyIntColumn]("age")
-        ), res3)
+//        val result = Project(List(
+//            table.column[VarCharColumn]("fname"),
+//            table.column[TinyIntColumn]("score1"),
+////            table.column[TinyIntColumn]("score2"),
+//            table.column[TinyIntColumn]("age")
+//        ), res2)
 
 //        val result = ProjectAggregate(
 //            List(),
@@ -51,13 +51,13 @@ object Main extends App {
 //                Avg(table.column[TinyIntColumn]("age"))
 //        ), res2)
 
-//        val result = ProjectAggregate(
-//            List(table.column[VarCharColumn]("fname")),
-//            List(
-//                Count(table.column[TinyIntColumn]("age")),
-//                Min(table.column[TinyIntColumn]("age")),
-//                Max(table.column[TinyIntColumn]("age"))
-//            ), res2, Some(table.column[VarCharColumn]("fname")))
+        val result = ProjectAggregate(
+            List(table.column[FixedCharColumn]("state")),
+            List(
+                Count(table.column[TinyIntColumn]("age")),
+                Min(table.column[TinyIntColumn]("age")),
+                Max(table.column[TinyIntColumn]("age"))
+            ), res2, Some(table.column[VarCharColumn]("state")))
 
         result.foreach(x => println(x))
 
@@ -72,8 +72,9 @@ object Main extends App {
 //        val res = SelectRange(table.column[TinyIntColumn]("age"), "90", "127")
 //        val res1 = FetchSelectMatch(table.column[FixedCharColumn]("state"), List("CT", "NY", "NJ", "TX"), res)
 
-        val res = SelectMatch(table.column[VarCharColumn]("fname"), List("Jennie"))
-        val res1 = FetchSelectRange(table.column[TinyIntColumn]("age"), "18", "127", res)
+        val res = SelectRange(table.column[TinyIntColumn]("age"), "18", "127")
+        val res1 = FetchSelectMatch(table.column[VarCharColumn]("fname"), List("Jennie"), res)
+        val res2 = FetchSelectMatch(table.column[FixedCharColumn]("state"), List("CT", "NY", "NJ", "TX"), res1)
 
 //        val resIter = res1.iterator
 //        resIter foreach(x => Unit)
@@ -85,22 +86,22 @@ object Main extends App {
 //            table.column[TinyIntColumn]("age")
 //        ), res1)
 
-        val result = ProjectAggregate(
-            List(),
-            List(
-                Count(table.column[VarCharColumn]("fname"))
-        ), res1)
-
 //        val result = ProjectAggregate(
+//            List(),
 //            List(
-////                table.column[VarCharColumn]("fname")
-//            ),
-//            List(
-//                Count(table.column[TinyIntColumn]("age")),
-//                Avg(table.column[TinyIntColumn]("age"))
-//            ), res1, Some(table.column[VarCharColumn]("fname")))
+//                Count(table.column[VarCharColumn]("fname"))
+//        ), res1)
 
-        result.take(100).foreach(x => println(x))
+        val result = ProjectAggregate(
+            List(
+                table.column[FixedCharColumn]("state")
+            ),
+            List(
+                Count(table.column[TinyIntColumn]("age")),
+                Avg(table.column[TinyIntColumn]("age"))
+            ), res1, Some(table.column[VarCharColumn]("state")))
+
+        result.foreach(x => println(x))
         info("end --")
     }
 
