@@ -139,7 +139,7 @@ object DataLoaderMain extends App {
         val filename = "/Users/marcin/correla/correla_dataset_100mil.csv"
         val csv = SourceCSV(filename, '|', skipRows = 0)
 
-        DataLoader.fromCsv(table, csv, Some(20000000))
+        DataLoader.fromCsv(table, csv, Some(100000000))
     }
 
     def ame = {
@@ -147,8 +147,8 @@ object DataLoaderMain extends App {
         val filename = "/Users/marcin/correla/ame_sample_immutable.psv"
         val csv = SourceCSV(filename, '|', skipRows = 0)
 
-        DataLoader.fromCsv(table, csv, Some(20000000), "\"")
+        DataLoader.fromCsv(table, csv, Some(100000000), "\"")
     }
 
-    small
+    big
 }
