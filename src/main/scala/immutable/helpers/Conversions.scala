@@ -5,18 +5,42 @@ package immutable.helpers
  */
 
 object Conversions {
-    def bytesToInt(bytes: Array[Byte]): Int = bytes.reverse.foldLeft(0)((x, b) => (x << 8) + (b & 0xFF))
-
-    def intToBytes(i: Int, size: Int = 4): Array[Byte] = {
-        (1 to size - 1).map(_ * 8).foldLeft(Array[Byte]((i & 0xFF).toByte))((b, a) => b ++ Array[Byte](((i >> a) & 0xFF).toByte))
+    def bytesToInt(bytes: Array[Byte]): Int = {
+        var result = 0
+        result = result + (bytes(3) & 0xFF) << 8
+        result = result + (bytes(2) & 0xFF) << 8
+        result = result + (bytes(1) & 0xFF) << 8
+        result = result + (bytes(0) & 0xFF)
+        result
     }
 
-    def shortToBytes(i: Short, size: Int = 2): Array[Byte] = {
-        (1 to size - 1).map(_ * 8).foldLeft(Array[Byte]((i & 0xFF).toByte))((b, a) => b ++ Array[Byte](((i >> a) & 0xFF).toByte))
+    def intToBytes(intVal: Int): Array[Byte] = {
+        val bytes = new Array[Byte](4)
+        bytes(3) = ((intVal >> 24) & 0xFF).toByte
+        bytes(2) = ((intVal >> 16) & 0xFF).toByte
+        bytes(1) = ((intVal >> 8) & 0xFF).toByte
+        bytes(0) = (intVal & 0xFF).toByte
+        bytes
     }
 
-    def longToBytes(i: Long, size: Int = 8): Array[Byte] = {
-        (1 to size - 1).map(_ * 8).foldLeft(Array[Byte]((i & 0xFF).toByte))((b, a) => b ++ Array[Byte](((i >> a) & 0xFF).toByte))
+    def shortToBytes(intVal: Short): Array[Byte] = {
+        val bytes = new Array[Byte](2)
+        bytes(1) = ((intVal >> 8) & 0xFF).toByte
+        bytes(0) = (intVal & 0xFF).toByte
+        bytes
+    }
+
+    def longToBytes(intVal: Long): Array[Byte] = {
+        val bytes = new Array[Byte](8)
+        bytes(7) = ((intVal >> 56) & 0xFF).toByte
+        bytes(6) = ((intVal >> 48) & 0xFF).toByte
+        bytes(5) = ((intVal >> 32) & 0xFF).toByte
+        bytes(4) = ((intVal >> 24) & 0xFF).toByte
+        bytes(3) = ((intVal >> 24) & 0xFF).toByte
+        bytes(2) = ((intVal >> 16) & 0xFF).toByte
+        bytes(1) = ((intVal >> 8) & 0xFF).toByte
+        bytes(0) = (intVal & 0xFF).toByte
+        bytes
     }
 }
 

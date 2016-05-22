@@ -150,5 +150,5 @@ object DataLoaderMain extends App {
         DataLoader.fromCsv(table, csv, Some(20000000), "\"")
     }
 
-    big
+    ame
 }
