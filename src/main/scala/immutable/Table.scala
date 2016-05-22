@@ -1,6 +1,6 @@
 package immutable
 
-import immutable.encoders.{Dict, Dense}
+import immutable.encoders.{Dict, Dense, RLE}
 
 import scala.collection.mutable.MutableList
 import scala.io.Source
@@ -54,16 +54,39 @@ object Table {
                 }
 
                 val newColumn = col.get("type").asString match {
-                    case "TinyInt" => TinyIntColumn(name, tblName, Dense)
-                    case "ShortInt" => ShortIntColumn(name, tblName, Dense)
-                    case "Int" => IntColumn(name, tblName, Dense)
+                    case "BigInt" => encoder match {
+                        case 'Dense => BigIntColumn(name, tblName, Dense)
+                        case 'RLE => BigIntColumn(name, tblName, RLE)
+                        case x => throw new Exception(s"Encoder not compatible with this data type: ${x}")
+                    }
+                    case "Double" => encoder match {
+                        case 'Dense => DecimalColumn(name, tblName, Dense)
+                        case 'RLE => DecimalColumn(name, tblName, RLE)
+                        case x => throw new Exception(s"Encoder not compatible with this data type: ${x}")
+                    }
+                    case "TinyInt" => encoder match {
+                        case 'Dense => TinyIntColumn(name, tblName, Dense)
+                        case 'RLE => TinyIntColumn(name, tblName, RLE)
+                        case x => throw new Exception(s"Encoder not compatible with this data type: ${x}")
+                    }
+                    case "ShortInt" => encoder match {
+                        case 'Dense => ShortIntColumn(name, tblName, Dense)
+                        case 'RLE => ShortIntColumn(name, tblName, RLE)
+                        case x => throw new Exception(s"Encoder not compatible with this data type: ${x}")
+                    }
+                    case "Int" => encoder match {
+                        case 'Dense => IntColumn(name, tblName, Dense)
+                        case 'RLE => IntColumn(name, tblName, RLE)
+                        case x => throw new Exception(s"Encoder not compatible with this data type: ${x}")
+                    }
                     case "FixedChar" => encoder match {
                         case 'Dense => FixedCharColumn(name, tblName, size, Dense)
                         case 'Dict => FixedCharColumn(name, tblName, size, Dict)
-                        case _ => throw new Exception("Encoder not compatible with this data type.")
+                        case 'RLE => FixedCharColumn(name, tblName, size, RLE)
+                        case x => throw new Exception(s"Encoder not compatible with this data type: ${x}")
                     }
                     case "VarChar" => VarCharColumn(name, tblName, size, Dict)
-                    case _ => throw new Exception(s"Column definition not recognized: ${col.get("type").asString}")
+                    case x => throw new Exception(s"Column definition not recognized: ${x}")
                 }
 
                 columns += newColumn

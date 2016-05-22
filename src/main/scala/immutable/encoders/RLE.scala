@@ -13,7 +13,7 @@ import scala.io.Source
   * Created by marcin on 2/26/16.
   */
 
-case object RunLength extends Encoder {
+case object RLE extends Encoder {
     private val repeatValueSize = 2
 
     def iterator(col: Column) = new FixedRunLengthIterator(col)

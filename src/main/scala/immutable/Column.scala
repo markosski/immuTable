@@ -2,6 +2,7 @@ package immutable
 
 import immutable.encoders.{Encoder}
 import immutable.LoggerHelper._
+import immutable.helpers.Conversions
 
 /**
  * http://ktoso.github.io/scala-types-of-types/
@@ -127,10 +128,16 @@ case class ShortIntColumn(name: String, tblName: String, enc: Encoder) extends N
     }
 
     def stringToBytes(s: String): Array[Byte] = {
-        List(8).foldLeft(Array[Byte]((stringToValue(s) & 0xFF).toByte))((b, a) => b ++ Array[Byte](((stringToValue(s) >> a) & 0xFF).toByte))
+        val stringAsValue = s.toShort
+        val bytes = new Array[Byte](2)
+        bytes(1) = ((stringAsValue >> 8) & 0xFF).toByte
+        bytes(0) = (stringAsValue & 0xFF).toByte
+        bytes
     }
 
-    def bytesToValue(bytes: Array[Byte]): Short = bytes.reverse.foldLeft(0)((x, b) => (x << 8) + (b & 0xFF)).toShort
+    def bytesToValue(bytes: Array[Byte]): Short = {
+        Conversions.bytesToShort(bytes)
+    }
 
     def validate(s: String) = {
         if (s.toLong > Short.MaxValue || s.toLong < Short.MinValue + 1)
@@ -155,13 +162,57 @@ case class IntColumn(name: String, tblName: String, enc: Encoder) extends Numeri
     }
 
     def stringToBytes(s: String): Array[Byte] = {
-        List(8, 16, 24).foldLeft(Array[Byte]((stringToValue(s) & 0xFF).toByte))((b, a) => b ++ Array[Byte](((stringToValue(s) >> a) & 0xFF).toByte))
+        val stringAsValue = s.toInt
+        val bytes = new Array[Byte](4)
+        bytes(3) = ((stringAsValue >> 24) & 0xFF).toByte
+        bytes(2) = ((stringAsValue >> 16) & 0xFF).toByte
+        bytes(1) = ((stringAsValue >> 8) & 0xFF).toByte
+        bytes(0) = (stringAsValue & 0xFF).toByte
+        bytes
     }
 
-    def bytesToValue(bytes: Array[Byte]): Int = bytes.reverse.foldLeft(0)((x, b) => (x << 8) + (b & 0xFF))
+    def bytesToValue(bytes: Array[Byte]): Int = {
+        Conversions.bytesToInt(bytes)
+    }
 
     def validate(s: String) = {
         if (s.toLong > Int.MaxValue || s.toLong < Int.MinValue + 1)
+            throw new IllegalArgumentException(f"Value $s%s is out of bound for data type IntColumn.")
+    }
+}
+
+case class BigIntColumn(name: String, tblName: String, enc: Encoder) extends NumericColumn {
+    type DataType = Long
+    val ord = implicitly[Ordering[DataType]]
+    val num = implicitly[Numeric[DataType]]
+
+    val nullVal = Long.MinValue
+    val min = Long.MinValue + 1
+    val max = Long.MaxValue
+    val size = 8
+
+    def stringToValue(s: String): Long = s.toLong
+
+    def stringToBytes(s: String): Array[Byte] = {
+        val stringAsValue = s.toInt
+        val bytes = new Array[Byte](4)
+        bytes(7) = ((stringAsValue >> 56) & 0xFF).toByte
+        bytes(6) = ((stringAsValue >> 48) & 0xFF).toByte
+        bytes(5) = ((stringAsValue >> 40) & 0xFF).toByte
+        bytes(4) = ((stringAsValue >> 32) & 0xFF).toByte
+        bytes(3) = ((stringAsValue >> 24) & 0xFF).toByte
+        bytes(2) = ((stringAsValue >> 16) & 0xFF).toByte
+        bytes(1) = ((stringAsValue >> 8) & 0xFF).toByte
+        bytes(0) = (stringAsValue & 0xFF).toByte
+        bytes
+    }
+
+    def bytesToValue(bytes: Array[Byte]): Long = {
+        Conversions.bytesToLong(bytes)
+    }
+
+    def validate(s: String) = {
+        if (s.toLong > max || s.toLong < min)
             throw new IllegalArgumentException(f"Value $s%s is out of bound for data type IntColumn.")
     }
 }
