@@ -2,6 +2,8 @@ package immutable.encoders
 
 import java.nio.{ByteBuffer, IntBuffer}
 
+import immutable.operators.ParallelHelper
+
 import scala.collection.mutable
 import java.io._
 
@@ -53,7 +55,7 @@ case object Dict extends Encoder {
 
     class DictIterator(val col: Column) extends SeekableIterator[Int] {
         val table = SchemaManager.getTable(col.tblName)
-        val file = ColumnBufferManager.get(col.FQN)
+        val file = ColumnBufferManager.get(col.FQN, ParallelHelper.take(col.name))
         val valSize = 4
 
         var counter = 0

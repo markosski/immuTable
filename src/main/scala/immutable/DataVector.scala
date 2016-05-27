@@ -7,6 +7,7 @@ import scala.collection.mutable
 /**
   * Created by marcin on 4/4/16.
   */
+
 case class DataVector(val vecID: Int, val cols: List[Column], val data: List[Array[_]], val selected: mutable.BitSet = mutable.BitSet())
 
 //class DataVectorProducer(table: Table, cols: List[Column]) extends Iterable[DataVector] {

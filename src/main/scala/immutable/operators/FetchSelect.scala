@@ -48,7 +48,7 @@ case class FetchSelectMatch(col: Column, items: Seq[String], op: SelectionOperat
 
             while (dataVecSelected.hasNext) {
                 val localIdx = dataVecSelected.next
-                encIter.seek(dataVec.vecID - colVec.size + localIdx)
+                encIter.seek(dataVec.vecID - dataVec.data(0).size + localIdx)
 
                 val value = col.enc match {
                     case Dict => encIter.next.asInstanceOf[Int]
@@ -97,7 +97,7 @@ case class FetchSelectRange(col: Column, left: String, right: String, op: Select
 
             while (dataVecSelected.hasNext) {
                 val localIdx = dataVecSelected.next
-                encIter.seek(dataVec.vecID - colVec.size + localIdx)
+                encIter.seek(dataVec.vecID - dataVec.data(0).size + localIdx)
                 val value = encIter.next.asInstanceOf[col.DataType]
 
                 if (col.ord.gteq(value, minVal) && col.ord.lteq(value, maxVal)) {

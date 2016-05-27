@@ -70,7 +70,6 @@ object ColumnBufferManager {
         // Create mmap buffers based on chunk thresholds
         // following should generate mmaps with values like (0, 25), (25, 50), (50, 75), (75, 100)
         mbuffers += (name -> { for (i <- 0 until threads) yield file.getChannel().map(FileChannel.MapMode.READ_ONLY, chunks.take(i).sum, chunks(i)) })
-//        for (buffer <- mbuffers; bufferPart <- buffer._2) bufferPart.load()
         file.close()
     }
 

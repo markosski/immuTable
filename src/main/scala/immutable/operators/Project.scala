@@ -38,9 +38,22 @@ case class Project(cols: List[Column], op: SelectionOperator, limit: Option[Int]
     val opIter = op.iterator
     def iterator = new ProjectIterator()
 
+    def resolveDataVecColIdx(dataVec: DataVector) = {
+        var colIdxLookup = Map[String, Int]()
+
+        for (i <- 0 until cols.size) {
+            dataVec.cols.map(x => x.name).zipWithIndex.find(x => x._1 == cols(i).name) match {
+                case Some(x) => colIdxLookup = colIdxLookup + x
+                case _ => throw new Exception("Could not match column in resolveDataVecColIdx")
+            }
+        }
+        colIdxLookup
+    }
+
     class ProjectIterator extends Iterator[Seq[Any]] {
         var dataVec = opIter.next
         var selected = dataVec.selected.iterator
+        val dataVecColIdx = resolveDataVecColIdx(dataVec)
 
         def next = {
             var record: List[Any] = List()
@@ -48,10 +61,10 @@ case class Project(cols: List[Column], op: SelectionOperator, limit: Option[Int]
             val oid = localIdx + dataVec.vecID - dataVec.data(0).size
 
             for (i <- 0 until cols.size) {
-                record = record :+ dataVec.data(i)(localIdx)
+                record = record :+ dataVec.data(dataVecColIdx.get(cols(i).name).get)(localIdx)
             }
 
-            oid :: record
+            record
         }
 
         def hasNext = {
@@ -196,6 +209,8 @@ case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator]
 
         val mapIter = groupMap.iterator
 
+        override def toString = ""
+
         def next = {
             val groupItem = mapIter.next
             groupItem._1 :: groupItem._2.map(x => x.get.asInstanceOf[Any])
@@ -204,6 +219,7 @@ case class ProjectAggregate(cols: List[Column] = List(), aggrs: List[Aggregator]
         def hasNext = if (mapIter.hasNext) true else false
     }
 }
+
 
 /**
   * Experimental projection operator that operates on input operators in parallel.

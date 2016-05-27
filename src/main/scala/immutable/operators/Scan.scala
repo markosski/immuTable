@@ -31,11 +31,11 @@ case class Scan(col: Column) extends SelectionOperator {
       */
     class SelectIterator extends Iterator[DataVector] {
         val encIter = col.getIterator
-        var vecCounter = 0
+        var vecAccumSize = 0
 
         def next = {
-            val selection = BitSet()
             val vecSize = math.min(Config.vectorSize, table.size - encIter.position)
+            val selection = BitSet()
             val colVec = new Array[Any](vecSize)
 
             var counter = 0
@@ -46,8 +46,8 @@ case class Scan(col: Column) extends SelectionOperator {
                 counter += 1
             }
 
-            vecCounter += vecSize
-            DataVector(vecCounter, List(col), List(colVec), selection)
+            vecAccumSize += vecSize
+            DataVector(vecAccumSize, List(col), List(colVec), selection)
         }
 
         def hasNext = if (encIter.hasNext) true else false

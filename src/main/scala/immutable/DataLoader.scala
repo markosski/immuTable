@@ -128,7 +128,7 @@ object DataLoader {
 object DataLoaderMain extends App {
     def small = {
         val table = Table.loadTable("correla_dataset_small_new")
-        val filename = "/Users/marcin/correla/correla_dataset_small.csv"
+        val filename = "/Users/marcin/correla/correla_dataset_small_ids.csv"
         val csv = SourceCSV(filename, '|', skipRows = 0)
 
         DataLoader.fromCsv(table, csv, Some(1000000))
@@ -150,5 +150,12 @@ object DataLoaderMain extends App {
         DataLoader.fromCsv(table, csv, Some(20000000), "\"")
     }
 
-    ame
+    def small_join = {
+        val table = Table.loadTable("correla_dataset_join")
+        val filename = "/Users/marcin/correla/correla_dataset_join.csv"
+        val csv = SourceCSV(filename, '|', skipRows = 0)
+
+        DataLoader.fromCsv(table, csv, Some(6), "\"")
+    }
+    small_join
 }

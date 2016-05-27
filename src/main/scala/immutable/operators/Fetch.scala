@@ -26,7 +26,7 @@ case class Fetch(col: Column, op: SelectionOperator) extends SelectionOperator {
 
             while (dataVecSelected.hasNext) {
                 val localIdx = dataVecSelected.next
-                encIter.seek(dataVec.vecID - colVec.length + localIdx)
+                encIter.seek(dataVec.vecID - dataVec.data(0).size + localIdx)
 
                 val value = col.enc match {
                     case Dict => encIter.next.asInstanceOf[Int]

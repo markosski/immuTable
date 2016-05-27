@@ -8,6 +8,7 @@ object Config {
     val readBufferSize = 4096
     val loggerLevel = 'DEBUG
     val vectorSize = 512
+    val parallelizeOperators = true
 
     object bulkLoad {
         val vectorSize = 8192

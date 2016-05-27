@@ -51,10 +51,11 @@ case class ScanSelectRange(col: Column, left: String, right: String) extends Sel
     class SelectIterator extends Iterator[DataVector] {
         val encIter = col.getIterator
         var vecCounter = 0
+        var vecAccumSize = 0
 
         def next = {
-            val selection = BitSet()
             val vecSize = math.min(Config.vectorSize, table.size - encIter.position)
+            val selection = BitSet()
             val colVec = new Array[Any](vecSize)
 
             var counter = 0
@@ -68,8 +69,12 @@ case class ScanSelectRange(col: Column, left: String, right: String) extends Sel
                 counter += 1
             }
 
-            vecCounter += vecSize
-            DataVector(vecCounter, List(col), List(colVec), selection)
+            vecAccumSize += vecSize
+            DataVector(
+                vecAccumSize,
+                List(col),
+                List(colVec),
+                selection)
         }
 
         def hasNext = if (encIter.hasNext) true else false
@@ -94,11 +99,11 @@ case class ScanSelectMatch(col: Column, items: Seq[String]) extends SelectionOpe
             case _ => items.map(x => col.stringToValue(x))
         }
         val encIter = col.getIterator
-        var vecCounter = 0
+        var vecAccumSize = 0
 
         def next = {
-            val selection = BitSet()
             val vecSize = math.min(Config.vectorSize, table.size - encIter.position)
+            val selection = BitSet()
             val colVec = new Array[Any](vecSize)
             var counter = 0
 
@@ -114,14 +119,12 @@ case class ScanSelectMatch(col: Column, items: Seq[String]) extends SelectionOpe
                     counter += 1
                 }
 
-                val vec = DataVector(
-                    vecCounter + vecSize,
+                vecAccumSize += vecSize
+                DataVector(
+                    vecAccumSize,
                     List(col),
                     List(colVec),
                     selection)
-
-                vecCounter += 1
-                vec
 
             } else {
                 while (encIter.hasNext && counter < vecSize) {
@@ -134,14 +137,12 @@ case class ScanSelectMatch(col: Column, items: Seq[String]) extends SelectionOpe
                     counter += 1
                 }
 
-                val vec = DataVector(
-                    vecCounter + vecSize,
+                vecAccumSize += vecSize
+                DataVector(
+                    vecAccumSize,
                     List(col),
                     List(colVec),
                     selection)
-
-                vecCounter += 1
-                vec
             }
         }
 

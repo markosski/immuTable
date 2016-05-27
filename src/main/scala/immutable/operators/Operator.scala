@@ -13,6 +13,7 @@ import scala.util.{Try, Failure, Success}
   * Created by marcin on 2/26/16.
   *
   */
+
 trait SelectionOperator extends Iterable[DataVector] {
     def iterator: Iterator[DataVector]
 }
@@ -46,11 +47,17 @@ object SelectionOperator {
                 col.enc match {
                     case Dense => {
                         info(s"Registering new Memory buffer: ${col.FQN}")
-                        ColumnBufferManager.registerMemory(col.FQN, s"${Config.home}/${table.name}/${col.name}.${ext}", col.size, Some(1))
+                        ParallelHelper.registry.get(col.name) match {
+                            case Some(x) => ColumnBufferManager.registerMmap(col.FQN, s"${Config.home}/${table.name}/${col.name}.${ext}", col.size, Some(x._1))
+                            case None => ColumnBufferManager.registerMmap(col.FQN, s"${Config.home}/${table.name}/${col.name}.${ext}", col.size, Some(1))
+                        }
                     }
                     case _ => {
                         info(s"Registering new Mmap buffer: ${col.FQN}")
-                        ColumnBufferManager.registerMmap(col.FQN, s"${Config.home}/${table.name}/${col.name}.${ext}", col.size, Some(1))
+                            ParallelHelper.registry.get(col.name) match {
+                                case Some(x) => ColumnBufferManager.registerMmap(col.FQN, s"${Config.home}/${table.name}/${col.name}.${ext}", 4, Some(x._1))
+                                case None => ColumnBufferManager.registerMmap(col.FQN, s"${Config.home}/${table.name}/${col.name}.${ext}", 4, Some(1))
+                            }
                     }
                 }
 
